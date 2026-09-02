@@ -1,3 +1,7 @@
+## Important Note
+--
+If you simply want to use Filmroll, download the latest pre-built release from GitHub release page. You only need to clone this repository if you want to access, inspect, modify or build the source code.
+
 ## Python Environment on Powershell
 ---
 Please note: If we have a old filmrollenv folder - delete it first. Otherwose there may be conflicting python versions.
