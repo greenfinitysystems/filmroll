@@ -1,3 +1,43 @@
+## Screenshots
+
+### Archive & Thumbnail View
+
+Filmroll provides a fast, thumbnail-based view of an image archive, with
+ratings, photographic metadata and previews visible directly in the grid.
+
+![Filmroll Archive](screenshots/archive.png)
+
+### Loupe & Image Review
+
+Open an image for detailed inspection with metadata, histogram, rating,
+zoom and navigation controls.
+
+![Filmroll Loupe](screenshots/loupe.png)
+
+### Compare
+
+Select up to four images and review them side-by-side with synchronized
+navigation and inspection.
+
+![Filmroll Compare](screenshots/compare.png)
+
+### Fujifilm Metadata & Film Simulation
+
+Filmroll exposes Fujifilm-specific shooting information directly alongside
+the images, including film simulation, white balance and fine-tuning,
+Dynamic Range, tone and colour settings, Color Chrome effects, sharpness,
+clarity, grain and noise reduction. RGB histograms are also available
+during image review.
+
+![Fujifilm Metadata and Film Simulation](screenshots/fujifilm-metadata.png)
+
+### Metadata Filtering
+
+Filter an archive using photographic metadata such as camera, lens,
+focal length, aperture, ISO and film simulation.
+
+![Filmroll Metadata Filter](screenshots/filter.png)
+
 ## Important Note
 --
 If you simply want to use Filmroll, download the latest pre-built release from GitHub release page. You only need to clone this repository if you want to access, inspect, modify or build the source code.
