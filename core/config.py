@@ -28,13 +28,20 @@ class Config:
             return
 
         base_path = Path(sys._MEIPASS) if getattr(sys, 'frozen', False) else Path(__file__).parent.parent
-        self._conf_path = base_path
-        self._conf_file = self._conf_path / "config.json"
-        self._log_file = base_path / "filmroll.log"
         self._asset_path =  base_path / "assets"
+
+        # User-writable configuration and log directory.
+        if sys.platform == "win32":
+            self._conf_path = Path.home() / "AppData" / "Roaming" / "Filmroll"
+        else:
+            self._conf_path = Path.home() / ".config" / "filmroll"
+
+        self._conf_file = self._conf_path / "config.json"
+        self._log_file = self._conf_path / "filmroll.log"
+
         self._curr_conf = {}
 
-        self.log_level = "info"
+        self.log_level = "Error"
         self.preview_size = 1024
         self.border_ratio = 0.04
         self.border_color = "#ffffff"
@@ -55,7 +62,7 @@ class Config:
 
         if self._to_save: self._save()
         if not (self._asset_path / self._curr_conf["caption_font"]).exists():
-            raise RuntimeError(f"Missing Font file {self.curr_conf["caption_font"]} while searching in in {str(self._asset_path)}")
+            raise RuntimeError(f"Missing Font file {self._curr_conf['caption_font']} while searching in in {str(self._asset_path)}")
 
         logging.basicConfig(
             level=logging.ERROR,
@@ -221,7 +228,7 @@ class Config:
 
     @property
     def version(self) -> str:
-        return "0.5.0"
+        return "0.5.1"
 
     @property
     def about(self) -> str:

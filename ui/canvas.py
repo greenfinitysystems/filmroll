@@ -54,6 +54,8 @@ class Canvas(tb.Canvas):
         self.bind("<B1-Motion>", self._on_mouse_move)
         self.bind("<ButtonRelease-1>", self._on_mouse_lbutton_release)
         self.bind("<MouseWheel>", self._on_mouse_scroll)
+        self.bind("<Button-4>", self._on_mouse_scroll)
+        self.bind("<Button-5>", self._on_mouse_scroll)
 
         self.set_pos(i)
 

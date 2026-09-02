@@ -300,7 +300,7 @@ class Archive():
 
         # construct a backup file name and path
         p = Path(self._last_saved_loc)
-        backup_file_name = f"{p.stem}-backup-{datetime.now().strftime("%Y%m%d-%H%M%S")}{p.suffix}"
+        backup_file_name = f"{p.stem}-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}{p.suffix}"
         backup_file = p.parent / backup_file_name
 
         # clone the current archive and remove any lock

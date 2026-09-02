@@ -105,9 +105,9 @@ class ThumbnailGrid(tk.Frame):
 
         # Bindings
         self._canvas.bind("<Configure>", self._on_resize)
-        self._canvas.bind_all("<MouseWheel>", self._on_scroll)
-        self._canvas.bind_all("<Button-4>", self._on_scroll)
-        self._canvas.bind_all("<Button-5>", self._on_scroll)
+        self._canvas.bind("<MouseWheel>", self._on_scroll)
+        self._canvas.bind("<Button-4>", self._on_scroll)
+        self._canvas.bind("<Button-5>", self._on_scroll)
 
         self._canvas.bind("<ButtonPress-1>", self._on_mouse_down)
         self._canvas.bind("<B1-Motion>", self._on_mouse_drag)
