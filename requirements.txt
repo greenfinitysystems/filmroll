@@ -1,0 +1,7 @@
+pillow
+python-exiv2
+rawpy
+ttkbootstrap
+scipy
+pyperclip
+jsonpickle

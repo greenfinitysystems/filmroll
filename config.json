@@ -1,0 +1,36 @@
+{
+  "log_level": "Error",
+  "preview_size": 1024,
+  "border_ratio": 0.04,
+  "border_color": "#ffffff",
+  "caption_color": "#000000",
+  "caption_font": "DejaVuSans.ttf",
+  "xrawstudio_path": "C:\\Program Files\\FUJIFILM X RAW STUDIO\\FUJIFILM_X_RAW_STUDIO.exe",
+  "focal_groups": [
+    [
+      "Ultra Wide",
+      0,
+      18
+    ],
+    [
+      "Wide",
+      18,
+      35
+    ],
+    [
+      "Normal",
+      35,
+      50
+    ],
+    [
+      "Short Tele",
+      50,
+      70
+    ],
+    [
+      "Telephoto",
+      70,
+      600
+    ]
+  ]
+}
