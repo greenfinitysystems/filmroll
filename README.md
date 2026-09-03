@@ -40,17 +40,16 @@ focal length, aperture, ISO and film simulation.
 
 ## Important Note
 
-Current Release: Filmroll 0.5.1
 If you simply want to use Filmroll, download the latest pre-built release from GitHub release page. You only need to clone this repository if you want to access, inspect, modify or build the source code.
-Users are strongly recommended to use version 0.5.1 or later. Version 0.5.0 is superseded by 0.5.1.
+Users are strongly recommended to use latest version.
 
-Windows Executable: Download filmroll-0.5.1.zip from github release and unzip in a suitable folder. Double click the .exe file to run.
+Windows Executable: Download filmroll.zip from github release and unzip in a suitable folder. Double click the .exe file to run.
 
 Linux AppImage: Download the AppImage file from github release and mark it executable before running
 
 ~~~bash
-chmod +x Filmroll-0.5.1-x86_64.AppImage
-./Filmroll-0.5.1-x86_64.AppImage
+chmod +x Filmroll-x86_64.AppImage
+./Filmroll-x86_64.AppImage
 ~~~
 
 ## Configuration

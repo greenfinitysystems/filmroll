@@ -486,32 +486,101 @@ class ThumbnailGrid(tk.Frame):
 
         anchor_x, anchor_y = self._zoom_latest_pos
         direction = self._zoom_latest_direction
+
         self._zoom_latest_pos = None
         self._zoom_latest_direction = None
-        
-        if anchor_x is None or anchor_y is None:
-            # fallback → center of viewport
-            anchor_x = self._canvas.canvasx(self._canvas.winfo_width() // 2)
-            anchor_y = self._canvas.canvasy(self._canvas.winfo_height() // 2)
 
+        if direction not in (-1, 1):
+            return
+
+        # ---------------------------------------------------------
+        # Resolve the zoom anchor.
+        #
+        # Mouse-wheel zoom:
+        #     use the actual mouse position.
+        #
+        # Keyboard zoom / all-the-way zoom:
+        #     use the active thumbnail, or the nearest visible
+        #     thumbnail to the viewport centre.
+        # ---------------------------------------------------------
+        anchored_index = None
+
+        if anchor_x is None or anchor_y is None:
+            anchor = self._get_zoom_anchor()
+
+            if anchor is None:
+                return
+
+            anchored_index, anchor_x, anchor_y = anchor
+
+        # ---------------------------------------------------------
+        # If the anchor came from the mouse, determine which
+        # currently visible thumbnail occupies that position.
+        #
+        # IMPORTANT:
+        # The displayed grid is indexed through _visible_indices,
+        # not directly through the archive's raw item indices.
+        # ---------------------------------------------------------
         cell = self._cell
 
         col = int((anchor_x - self._gap) // cell)
         row = int(anchor_y // cell)
 
-        index = row * self._columns + col
-        if index < 0 or index >= self._total_items:
-            return
+        flat_index = row * self._columns + col
 
+        if anchored_index is None:
+            if flat_index < 0 or flat_index >= len(self._visible_indices):
+                # Mouse position is not over a valid thumbnail.
+                # Fall back to the nearest visible thumbnail.
+                anchor = self._get_zoom_anchor()
+
+                if anchor is None:
+                    return
+
+                anchored_index, anchor_x, anchor_y = anchor
+
+                cell = self._cell
+
+                # Recalculate the visible position of the fallback
+                # thumbnail.
+                flat_index = self._visible_indices.index(anchored_index)
+
+                row = flat_index // self._columns
+                col = flat_index % self._columns
+
+                anchor_x = (
+                    self._gap
+                    + col * cell
+                    + self._thumb_size / 2
+                )
+
+                anchor_y = (
+                    row * cell
+                    + self._thumb_size / 2
+                )
+            else:
+                anchored_index = self._visible_indices[flat_index]
+
+        else:
+            # Active/fallback anchor already identifies the actual
+            # archive item. Resolve its current visible position.
+            flat_index = self._visible_indices.index(anchored_index)
+
+            row = flat_index // self._columns
+            col = flat_index % self._columns
+
+        # ---------------------------------------------------------
+        # Preserve the anchor's position inside its grid cell.
+        # ---------------------------------------------------------
         offset_x = anchor_x - (self._gap + col * cell)
         offset_y = anchor_y - (row * cell)
 
         old_x = self._gap + col * cell + offset_x
         old_y = row * cell + offset_y
 
-        new_size = 0
-
-        # Zoom step
+        # ---------------------------------------------------------
+        # Calculate new thumbnail size.
+        # ---------------------------------------------------------
         if alltheway and direction < 0:
             new_size = self._min_size
 
@@ -519,25 +588,91 @@ class ThumbnailGrid(tk.Frame):
             new_size = self._max_size
 
         else:
-            new_size = self._thumb_size + (self._zoom_step if direction > 0 else -self._zoom_step)
-            new_size = max(self._min_size, min(self._max_size, new_size))
+            new_size = (
+                self._thumb_size
+                + (
+                    self._zoom_step
+                    if direction > 0
+                    else -self._zoom_step
+                )
+            )
+
+            new_size = max(
+                self._min_size,
+                min(self._max_size, new_size)
+            )
 
         if new_size == self._thumb_size:
             return
 
         self._thumb_size = new_size
 
+        # ---------------------------------------------------------
+        # Recalculate the grid.
+        #
+        # Zooming can change the number of columns, so the same
+        # archive item may now have a completely different
+        # visible row/column.
+        # ---------------------------------------------------------
         self._recalculate_layout()
         self._canvas.update_idletasks()
 
+        # ---------------------------------------------------------
+        # Find the SAME archive item again in the new visible grid.
+        # ---------------------------------------------------------
+        if anchored_index not in self._visible_indices:
+            # The item disappeared during layout/filter changes.
+            # Fall back to the nearest valid visible thumbnail.
+            anchor = self._get_zoom_anchor()
+
+            if anchor is None:
+                self._render_visible()
+                return
+
+            anchored_index, new_anchor_x, new_anchor_y = anchor
+
+            new_flat_index = self._visible_indices.index(
+                anchored_index
+            )
+
+            new_row = new_flat_index // self._columns
+            new_col = new_flat_index % self._columns
+
+            # Preserve the relative location within the cell.
+            offset_x = new_anchor_x - (
+                self._gap
+                + new_col * self._cell
+            )
+
+            offset_y = new_anchor_y - (
+                new_row * self._cell
+            )
+
+        else:
+            new_flat_index = self._visible_indices.index(
+                anchored_index
+            )
+
+            new_row = new_flat_index // self._columns
+            new_col = new_flat_index % self._columns
+
         new_cell = self._cell
 
-        new_row = index // self._columns
-        new_col = index % self._columns
+        new_x = (
+            self._gap
+            + new_col * new_cell
+            + offset_x
+        )
 
-        new_x = self._gap + new_col * new_cell + offset_x
-        new_y = new_row * new_cell + offset_y
+        new_y = (
+            new_row * new_cell
+            + offset_y
+        )
 
+        # ---------------------------------------------------------
+        # Move the viewport so the anchor remains at the same
+        # screen position.
+        # ---------------------------------------------------------
         dx = new_x - old_x
         dy = new_y - old_y
 
@@ -545,11 +680,19 @@ class ThumbnailGrid(tk.Frame):
         new_view_y = view_y + dy
 
         viewport_h = self._canvas.winfo_height()
-        max_y = max(1, self._total_height - viewport_h)
+        max_y = max(
+            0,
+            self._total_height - viewport_h
+        )
 
-        new_view_y = max(0, min(new_view_y, max_y))
+        new_view_y = max(
+            0,
+            min(new_view_y, max_y)
+        )
 
-        self._canvas.yview_moveto(new_view_y / max(1, self._total_height))
+        self._canvas.yview_moveto(
+            new_view_y / max(1, self._total_height)
+        )
 
         self._render_visible()
 
@@ -712,18 +855,71 @@ class ThumbnailGrid(tk.Frame):
         self._zoom_latest_pos = (None, None)
         self._zoom_latest_direction = direction
 
-        if self._active_index is not None:
-            row = self._active_index // self._columns
-            col = self._active_index % self._columns
-            x = self._gap + col * self._cell + self._thumb_size // 2
-            y = row * self._cell + self._thumb_size // 2
-            self._zoom_latest_pos = (x, y)
-
         if self._zoom_redraw_pending:
             return
-        
+
         self._zoom_redraw_pending = True
         self.after(16, self._zoom_by, False)
+
+    def _get_zoom_anchor(self):
+        """
+        Return (index, canvas_x, canvas_y) for the best thumbnail to use
+        as the zoom anchor.
+
+        Priority:
+            1. Active visible thumbnail
+            2. Nearest visible thumbnail to viewport centre
+            3. None if there are no visible thumbnails
+        """
+
+        if not self._visible_indices:
+            return None
+
+        # ---------------------------------------------------------
+        # 1. Active thumbnail, if it is currently visible
+        # ---------------------------------------------------------
+        if self._active_index in self._visible_indices:
+            flat_index = self._visible_indices.index(self._active_index)
+
+            row = flat_index // self._columns
+            col = flat_index % self._columns
+
+            x = self._gap + col * self._cell + self._thumb_size / 2
+            y = row * self._cell + self._thumb_size / 2
+
+            return self._active_index, x, y
+
+        # ---------------------------------------------------------
+        # 2. No usable active thumbnail.
+        #    Find the visible thumbnail nearest to the viewport centre.
+        # ---------------------------------------------------------
+        viewport_x = self._canvas.canvasx(self._canvas.winfo_width() / 2)
+        viewport_y = self._canvas.canvasy(self._canvas.winfo_height() / 2)
+
+        best_index = None
+        best_x = None
+        best_y = None
+        best_distance = None
+
+        for flat_index, index in enumerate(self._visible_indices):
+            row = flat_index // self._columns
+            col = flat_index % self._columns
+
+            x = self._gap + col * self._cell + self._thumb_size / 2
+            y = row * self._cell + self._thumb_size / 2
+
+            distance = (x - viewport_x) ** 2 + (y - viewport_y) ** 2
+
+            if best_distance is None or distance < best_distance:
+                best_distance = distance
+                best_index = index
+                best_x = x
+                best_y = y
+
+        if best_index is None:
+            return None
+
+        return best_index, best_x, best_y
 
 # endregion
 
@@ -961,18 +1157,54 @@ class ThumbnailGrid(tk.Frame):
     def _on_scroll(self, event: Any):
         is_ctrl = (event.state & 0x0004) != 0
 
+        # ---------------------------------------------------------
+        # Ctrl + Wheel = Thumbnail zoom
+        # ---------------------------------------------------------
         if is_ctrl:
             self._on_handle_zoom(event)
-            return
+            return "break"
 
+        # ---------------------------------------------------------
+        # If the entire grid fits inside the viewport, there is
+        # nowhere to scroll.
+        # ---------------------------------------------------------
+        viewport_h = self._canvas.winfo_height()
+        max_y = max(0, self._total_height - viewport_h)
+
+        if max_y <= 0:
+            return "break"
+
+        # ---------------------------------------------------------
+        # Determine scroll direction.
+        # ---------------------------------------------------------
         if event.num == 4:
-            self._canvas.yview_scroll(-1, "units")
+            delta = -1
         elif event.num == 5:
-            self._canvas.yview_scroll(1, "units")
+            delta = 1
         else:
-            self._canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            delta = int(-1 * (event.delta / 120))
+
+        if delta == 0:
+            return "break"
+
+        # ---------------------------------------------------------
+        # Scroll normally.
+        # ---------------------------------------------------------
+        self._canvas.yview_scroll(delta, "units")
+
+        # ---------------------------------------------------------
+        # Clamp the resulting viewport position.
+        # ---------------------------------------------------------
+        new_y = self._canvas.canvasy(0)
+        new_y = max(0, min(new_y, max_y))
+
+        self._canvas.yview_moveto(
+            new_y / max(1, self._total_height)
+        )
 
         self._render_visible()
+
+        return "break"
 
     def _on_open_preview(self, event: Any | None = None):
         count = len(self._selected_indices)

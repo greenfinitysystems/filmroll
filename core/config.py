@@ -228,7 +228,7 @@ class Config:
 
     @property
     def version(self) -> str:
-        return "0.5.2"
+        return "0.5.3"
 
     @property
     def about(self) -> str:

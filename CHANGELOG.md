@@ -1,5 +1,12 @@
 All notable changes to Filmroll are documented here.
 
+## [0.5.3] - 2026-09-04
+
+### Fixed
+
+- Issue #2 Zoom is not working properly when there are fewer images
+- Issue #3 Gallery allows vertical scrolling when content does not fill viewport
+
 ## [0.5.2] - 2026-09-03
 
 ### Fixed
@@ -45,3 +52,5 @@ All notable changes to Filmroll are documented here.
 - Minimum Python version for source/development builds: Python 3.11
 
 ## [0.5.0] - 2026-08-02
+
+- Initial release
