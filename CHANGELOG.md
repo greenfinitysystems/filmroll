@@ -4,7 +4,7 @@ All notable changes to Filmroll are documented here.
 
 ### Fixed
 
-- Navigation on arrow key in the Loupe window was not working.
+- Issue #1 Arrow Keys on Loupe view not working.
 
 ## [0.5.1] - 2026-09-03
 
