@@ -177,3 +177,67 @@ Finally run linuxdeploy to create the AppImage
 ~~~bash
 ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
 ~~~
+
+### Automation Script 
+The following script can be considered as a starting point for linux build automation. It assumes that the developer completed necessary steps to install Python 3.11+. If Python 3.11 is specifically installed folling Step 2b(ii) above
+
+~~~bash
+#!/bin/bash
+
+rm -rf env
+# Change this line to "python3 -m venv env" if Python 3.11+ is the default version shipped with your distro
+python3.11 -m venv env
+
+source env/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+pip install pyinstaller
+
+rm -rf build dist
+pyinstaller \
+    --noconfirm \
+    --clean \
+    --onedir \
+    --windowed \
+    --add-data "assets:assets" \
+    --contents-directory "filmroll_files" \
+    --collect-all ttkbootstrap \
+    --collect-all PIL \
+    filmroll.py
+
+cat << EOF > output.txt
+[Desktop Entry]
+Name=Filmroll
+Comment=FUJIFILM Image Archive and Review Tool
+Exec=filmroll
+Icon=icon
+Type=Application
+Categories=Graphics;Photography;
+Terminal=false
+EOF
+
+rm -rf AppDir
+
+mkdir -p AppDir/usr/bin
+cp -a dist/filmroll/. AppDir/usr/bin/
+mkdir -p AppDir/usr/share/applications
+mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
+cp filmroll.desktop AppDir/
+cp filmroll.desktop AppDir/usr/share/applications/filmroll.desktop
+cp assets/icon.png AppDir
+cp assets/icon.png AppDir/usr/share/icons/hicolor/512x512/apps/icon.png
+
+FILE="/linuxdeploy-x86_64.AppImage"
+
+if [ -f "$FILE" ]; then
+    echo "linuxdeploy-x86_64.AppImage File exists."
+else
+    echo "linuxdeploy-x86_64.AppImage File exists."
+    wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+fi
+
+sudo chmod +x linuxdeploy-x86_64.AppImage
+
+./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+
+~~~

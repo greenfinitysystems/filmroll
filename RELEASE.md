@@ -1,4 +1,4 @@
-FILMROLL 0.5.1 — WINDOWS VERSION
+FILMROLL 0.5.2 — WINDOWS VERSION
 =================================
 
 Thank you for using Filmroll.
@@ -92,7 +92,7 @@ with, endorsed by, or sponsored by Fujifilm.
 VERSION
 -------
 
-Filmroll 0.5.1
+Filmroll 0.5.2
 Windows distribution
 
 For source code, documentation and updates, please visit the official

@@ -1,5 +1,11 @@
 All notable changes to Filmroll are documented here.
 
+## [0.5.2] - 2026-09-03
+
+### Fixed
+
+- Navigation on arrow key in the Loupe window was not working.
+
 ## [0.5.1] - 2026-09-03
 
 ### Changed

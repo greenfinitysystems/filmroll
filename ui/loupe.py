@@ -184,8 +184,8 @@ class Loupe:
                 self._active_local = min(count - 1, self._active_local + self._cols)
             else: return
 
-        if len(self._stacks) == 1: _navigate_global(event)
-        else: _navigate_local(event)
+        if len(self._stacks) == 1: _navigate_global()
+        else: _navigate_local()
         self._redraw()
 
     def _onkey_n(self, event=None):
