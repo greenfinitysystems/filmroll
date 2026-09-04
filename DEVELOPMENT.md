@@ -17,62 +17,52 @@ cd filmroll
 You can then follow the development environment instructions below for your operating system.
 
 ## 2a. Development Environment on Windows 11
-note: If an old env folder exists within filmroll, delete it first. Otherwise, there may be conflicts between Python versions.
+If an old env folder exists within filmroll, delete it first. Otherwise, there may be conflicts between Python versions. If you are using visual studio terminal Execution policy is automatical setup when the terminal is opened for the first time. In other situations turn it on by executing the following command.
+~~~bash
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+~~~
+
 ~~~bash
 python -m venv env
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
 .\env\Scripts\activate
-pip --version
-python -m pip cache purge (sometimes the pip install refuses to run. We need to clean the cache)
-pip install -r requirements.txt
 ~~~
 
 ## 2b. Development Environment on Ubuntu
 Setting up development environment on Linux varies slightly based upon what is the default version of Python the Linux distribution originally shipped with. Verify your python version
 ~~~bash
-python3.11 --version
+python3 --version
 ~~~
 
 ### (i). Python version >= 3.11 (Example: Ubuntu 24.04 LTS Desktop or above)
-By default Ubuntu 24.04 onwards have Python >= 3.11.
+By default Ubuntu 24.04 onwards have Python >= 3.11. No separate Python installation is necessary.
+Just create the virtual environment.
 ~~~bash
 sudo apt update
-sudo apt install software-properties-common
-sudo apt install python3-venv python3-tk
-~~~
-
-Ensure new Python version and create a Python virtual environment
-~~~bash
-python3 --version
+sudo apt install -y software-properties-common python3-venv python3-tk
 python3 -m venv env
+source env/bin/activate
 ~~~
 
 ### (ii). Python version < 3.11 (Example: Older Ubuntu 22.04.5 LTS Desktop)
-By default Ubuntu 22.04.5 have Python 3.10. Install Python 3.11 from deadsnakes ppa.
+Ubuntu 22.04.5 have Python 3.10. Install Python 3.11 from deadsnakes ppa first.
+Then create the virtual environment
 ~~~bash
-sudo apt update
-sudo apt install software-properties-common
 sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt update
-sudo apt policy python3.11
-sudo apt install python3.11 python3.11-venv python3.11-tk
-~~~
-
-Ensure new Python version and create a Python virtual environment
-~~~bash
-python3.11 --version
+sudo apt install -y software-properties-common install python3.11 python3.11-venv python3.11-tk
 python3.11 -m venv env
+source env/bin/activate
 ~~~
 
 ### 3. Setup Dependencies and Libraries
+At times the pip install refuses to run due to cached versions. We may need to clean the cache
 ~~~bash
-source env/bin/activate
-python --version
 python -m pip install --upgrade pip
+python -m pip cache purge
 pip install -r requirements.txt
 ~~~
 
-### 4. Run Filmroll directly from development environment
+### 4. Run Filmroll from development environment
 While you are inside filmroll folder and filmroll virtual environment
 ~~~bash
 python filmroll.py
@@ -80,11 +70,18 @@ python filmroll.py
 
 ## 5. Build Filmroll as Standalone Executable
 
-### 5a. Build for Windows
----
+Install pyinstaller
+
 ~~~bash
 pip install pyinstaller
+~~~
 
+### 5a. Build for Windows
+---
+
+Run pyinstaller
+
+~~~bash
 python -m PyInstaller `
 --noconfirm `
 --clean `
@@ -101,38 +98,26 @@ After successful build filmroll can be tested by double clicking on {path-to-fil
 
 ### 5b. Build for Linux
 
-Filmroll should be built on Linux using a Linux environment. PyInstaller is platform-specific, so a Linux build must be performed on Linux.
-
-The following example uses Ubuntu 22.04 LTS with Python 3.11. Before building, make sure the Python shared library is installed:
+Filmroll should be built on Linux using a Linux environment. PyInstaller is platform-specific, so a Linux build must be performed on Linux. The following example uses Ubuntu 22.04 LTS Virtual machine with Python 3.11 installed following step 2b(ii). Before building, make sure the correct Python shared library is installed. If you have specifically installed python3.11, the libpython3.11 library may be missing in your system. Installit by running the foloowing command.
 
 ~~~bash
-sudo apt update
-sudo apt install libpython3.11
+sudo apt install -y libpython3.11
 ~~~
 
-Clean any previous folders and run pyinstaller
+Run pyinstaller
 
 ~~~bash
 pip install pyinstaller
-
-rm -rf build dist
-
 pyinstaller \
-    --noconfirm \
-    --clean \
-    --onedir \
-    --windowed \
-    --add-data "assets:assets" \
-    --contents-directory "filmroll_files" \
-    --collect-all ttkbootstrap \
-    --collect-all PIL \
-    filmroll.py
-~~~
-
-After a successful build, the application can be tested with:
-
-~~~bash
-./dist/filmroll/filmroll
+--noconfirm \
+--clean \
+--onedir \
+--windowed \
+--add-data "assets:assets" \
+--contents-directory "filmroll_files" \
+--collect-all ttkbootstrap \
+--collect-all PIL \
+filmroll.py
 ~~~
 
 ### 6. Building the Linux AppImage
@@ -141,103 +126,8 @@ After a successful build, the application can be tested with:
 
 Download the LinuxDeploy AppImage from the official LinuxDeploy GitHub releases page and make it executable. Then create the AppDir structure and package Filmroll as an AppImage. The resulting AppImage can be tested directly without installation.
 
-**Example Desktop Entry**
-~~~
-[Desktop Entry]
-Name=Filmroll
-Comment=FUJIFILM Image Archive and Review Tool
-Exec=filmroll
-Icon=icon
-Type=Application
-Categories=Graphics;Photography;
-Terminal=false
-~~~
+### 7. Automation Scripts
+The following scripts may be considered as an example and **starting point** for Windows / Ubuntu Linux build automation. It assumes that the **developer already completed** necessary steps to install Python 3.11+ and other dependencies as stated above in step 1, 2 and 3.
 
-Copy binaries to AppDir
-
-~~~bash
-rm -rf AppDir
-mkdir -p AppDir/usr/bin
-cp -a dist/filmroll/. AppDir/usr/bin/
-~~~
-
-Copy the desktop entry and icons to desired locations
-
-~~~bash
-mkdir -p AppDir/usr/share/applications
-mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
-cp filmroll.desktop AppDir/
-cp filmroll.desktop AppDir/usr/share/applications/filmroll.desktop
-cp assets/icon.png AppDir
-cp assets/icon.png AppDir/usr/share/icons/hicolor/512x512/apps/icon.png
-~~~
-
-Finally run linuxdeploy to create the AppImage
-
-~~~bash
-./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
-~~~
-
-### Automation Script 
-The following script can be considered as a starting point for linux build automation. It assumes that the developer completed necessary steps to install Python 3.11+. If Python 3.11 is specifically installed folling Step 2b(ii) above
-
-~~~bash
-#!/bin/bash
-
-rm -rf env
-# Change this line to "python3 -m venv env" if Python 3.11+ is the default version shipped with your distro
-python3.11 -m venv env
-
-source env/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-pip install pyinstaller
-
-rm -rf build dist
-pyinstaller \
-    --noconfirm \
-    --clean \
-    --onedir \
-    --windowed \
-    --add-data "assets:assets" \
-    --contents-directory "filmroll_files" \
-    --collect-all ttkbootstrap \
-    --collect-all PIL \
-    filmroll.py
-
-cat << EOF > output.txt
-[Desktop Entry]
-Name=Filmroll
-Comment=FUJIFILM Image Archive and Review Tool
-Exec=filmroll
-Icon=icon
-Type=Application
-Categories=Graphics;Photography;
-Terminal=false
-EOF
-
-rm -rf AppDir
-
-mkdir -p AppDir/usr/bin
-cp -a dist/filmroll/. AppDir/usr/bin/
-mkdir -p AppDir/usr/share/applications
-mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
-cp filmroll.desktop AppDir/
-cp filmroll.desktop AppDir/usr/share/applications/filmroll.desktop
-cp assets/icon.png AppDir
-cp assets/icon.png AppDir/usr/share/icons/hicolor/512x512/apps/icon.png
-
-FILE="/linuxdeploy-x86_64.AppImage"
-
-if [ -f "$FILE" ]; then
-    echo "linuxdeploy-x86_64.AppImage File exists."
-else
-    echo "linuxdeploy-x86_64.AppImage File exists."
-    wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-fi
-
-sudo chmod +x linuxdeploy-x86_64.AppImage
-
-./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
-
-~~~
+- [Windows 11](make.ps1)
+- [Ubuntu Linux](make.sh)
