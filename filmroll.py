@@ -4,7 +4,7 @@ from ui.mainwindow import FilmrollGUI
 
 # main application
 def main():
-    root = tb.Window(themename="flatly")
+    root = tb.Window(themename="flatly", className="Filmroll")
     FilmrollGUI(root)
     root.mainloop()
 
