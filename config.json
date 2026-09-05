@@ -7,30 +7,27 @@
   "caption_font": "DejaVuSans.ttf",
   "xrawstudio_path": "C:\\Program Files\\FUJIFILM X RAW STUDIO\\FUJIFILM_X_RAW_STUDIO.exe",
   "focal_groups": [
-    [
-      "Ultra Wide",
-      0,
-      18
-    ],
-    [
-      "Wide",
-      18,
-      35
-    ],
-    [
-      "Normal",
-      35,
-      50
-    ],
-    [
-      "Short Tele",
-      50,
-      70
-    ],
-    [
-      "Telephoto",
-      70,
-      600
-    ]
-  ]
+  ["Ultra Wide",         0.1,   7.0],
+  ["8mm",                7.1,   9.0],
+  ["10mm",               9.1,  12.0],
+  ["13mm",              12.1,  15.0],
+  ["16mm",              15.1,  17.0],
+  ["18mm",              17.1,  19.0],
+  ["20mm",              19.1,  22.0],
+  ["23mm",              22.1,  24.0],
+  ["25mm",              24.1,  26.0],
+  ["27mm",              26.1,  29.0],
+  ["30mm",              29.1,  32.0],
+  ["35mm Class",        32.1,  39.0],
+  ["40mm Class",        39.1,  45.0],
+  ["50mm Class",        45.1,  59.0],
+  ["Short Telephoto",   59.1,  80.0],
+  ["Portrait Telephoto",80.1, 100.0],
+  ["Long Portrait",    100.1, 150.0],
+  ["Long Telephoto",   150.1, 300.0],
+  ["Super Telephoto",  300.1, 500.0],
+  ["Extreme Telephoto",500.1, 600.0],
+  ["Ultra Telephoto",  600.1, 1000.0]
+],
+"use_focal_groups": 1
 }

@@ -1,5 +1,6 @@
 # region(python_imports)
 
+from email import message
 import logging
 import pickle
 import jsonpickle
@@ -248,19 +249,34 @@ class Archive():
     @staticmethod
     # opens a saved archive from disk and returns the archive
     def open(file_name: str) -> Self:
-        with open(file_name, "r") as f:
-            ar = jsonpickle.decode(f.read())
-        ar.unlock()
-        return ar
+        messages = []
 
-    @staticmethod
-    # opens a saved legacy archive from disk and returns the archive
-    def open_legacy(file_name: str) -> Self:
-        with open(file_name, 'rb') as f:
-            ar = pickle.load(f)
+        try:
+            with open(file_name, "r") as f:
+                ar = jsonpickle.decode(f.read())
+            ar.unlock()
+            ar._last_saved_loc = file_name
+            return ar
 
-        ar.unlock()
-        return ar
+        except Exception as e:
+            logwriter.error(f"Error occurred opening archive: {e}")
+            messages.append(str(e)) 
+
+        try:
+            with open(file_name, 'rb') as f:
+                ar = pickle.load(f)
+            ar.unlock()
+            ar._last_saved_loc = file_name
+            # we are converting the archive here from legacy binary mode
+            # to the new json mode. Hence we will save it again in the new format
+            ar.save()
+            return ar
+        
+        except Exception as e:
+            logwriter.error(f"Attempted to open the archive in legacy mode. Still got error: {e}")
+            messages.append(str(e))
+
+        raise Exception("\n".join(messages))
 
     # closes the current archive
     def close(self) -> None:
@@ -276,8 +292,7 @@ class Archive():
         if save_as is not None:
             self._last_saved_loc = save_as
 
-        # otherwise we will see if we already had an last_saved_location
-        # but if we find that our last saved location is None, which can be 
+        # if we find that our last saved location, which can be 
         # a case because during the creation of a new archive we force it to save
         # for the first time, we will use a default archive name
         if self._last_saved_loc is None:
@@ -951,13 +966,6 @@ class Archive():
 
         _step_1(self, stacks)
 
-    # used for debugging. prints the inner contents on stdout
-    def print(self) -> None:
-        print("\n")
-        print(self.name)
-        for entry in self._catalog.values():
-            entry.print(prefix="  ")
-
     # returns set of filters to be used by Filter Dialog
     # and thumbnailgrid view
     def get_filters(self) -> list:
@@ -1005,7 +1013,7 @@ class Archive():
             # we shall open the xrawstudio; otherwise inform the user that we succeded
             # copying the required files
 
-            if current_os != "Windows" or xrawstudio is None or not xrawstudio.exists():
+            if current_os != "Windows" or xrawstudio == "" or not Path(xrawstudio).exists():
                 messagebox.showinfo("Copy Complete", f"{n} raw images copied.")
                 return
 
@@ -1021,7 +1029,7 @@ class Archive():
                     "-File", 
                     script_path,
                     dest,
-                    str(xrawstudio)
+                    xrawstudio
                 ],
                 stdout=None,  # Handled by OS, does not block Python
                 stderr=None
@@ -1242,6 +1250,6 @@ class Archive():
                 # ask the async ctrl to update the main window status bar
                 async_ctrl.notify("Generating Preview...", f.name)
             except Exception as e:
-                print(str(e))
+                logwriter.error(f"Exception occured in _previews worker function: {str(e)}")
 
 # endregion

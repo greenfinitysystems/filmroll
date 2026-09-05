@@ -75,9 +75,16 @@ class Loupe:
 # region(event_handlers)
 
     def _redraw(self, event=None):
-        self._root.title(self._current_stack().identity)
-        for canvas in self._canvases:
-            canvas._redraw()
+        try:
+            if self._root is None: 
+                return
+
+            self._root.title(self._current_stack().identity)
+            for canvas in self._canvases:
+                canvas._redraw()
+
+        except Exception as e:
+            logwriter.error(f"Exception occured in Loupe._redraw: {str(e)}")
 
     def _on_window_closing(self):
         self._reset()

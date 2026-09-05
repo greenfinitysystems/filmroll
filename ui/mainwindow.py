@@ -35,9 +35,8 @@ class FileMenu(Enum):
     importFolder = 9
     separator_3 = 10
     properties = 11
-    convert = 12
-    separator_4 = 13
-    exit = 14
+    separator_4 = 12
+    exit = 13
 
 # endregion
 
@@ -103,9 +102,8 @@ class FilmrollGUI:
         self.file_menu.add_command(label="Import Folder...", command=self.on_file_import_folder)
         self.file_menu.add_separator() #
         self.file_menu.add_command(label="Properties...", command=self.on_file_properties)
-        self.file_menu.add_command(label="Convert...", command=self.on_file_convert)
         self.file_menu.add_separator() #
-        self.file_menu.add_command(label="Exit", command=self.root.destroy)
+        self.file_menu.add_command(label="Exit", command=self.on_file_exit)
 
         help_menu = tk.Menu(self.menubar, tearoff=0)
         self.menubar.add_cascade(label="Help", menu=help_menu)
@@ -528,7 +526,7 @@ class FilmrollGUI:
         # whether self.doc is not None or not
         if self.doc is None:
             return
-
+                    
         try:
             self.thumbnailgrid.unset_doc()
             self.doc.close()
@@ -643,27 +641,8 @@ class FilmrollGUI:
         self.doc.save()
         self.root.title(self.doc.name)
 
-    def on_file_convert(self):
-        # get the file name to open
-        arc_path = filedialog.askopenfilename(title="Open Archive", initialdir=Path.home(),
-            filetypes=((f"{self._appname} archive", "*.far"), ("All files", "*.*")))
-
-        # if user cancels, return
-        if not arc_path:
-            return
-
-        src_path = Path(arc_path)
-        dst_path = src_path.with_name(f"{src_path.stem}-json{src_path.suffix}")
-
-        try:
-            # open the document
-            doc = Archive.open_legacy(arc_path)
-            doc.save(dst_path)
-            messagebox.showinfo("Conversion Complete", f"Archive comverted to latest format and saved as {dst_path.stem}{dst_path.suffix}")
-
-        except Exception as e: 
-            self.report_error("Exception occured Archive.open", str(e))
-
+    def on_file_exit(self):
+        self.on_closing()
 
 # endregion
 
@@ -723,4 +702,3 @@ class FilmrollGUI:
             self.reset_statusbar()
 
 # endregion
-

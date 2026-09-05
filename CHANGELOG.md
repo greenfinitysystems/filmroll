@@ -1,5 +1,22 @@
 All notable changes to Filmroll are documented here.
 
+## [0.5.4] - 2026-09-06
+
+### Fixed
+- Issue #4 Exit application by File -> Exit does not exit the app and hangs in memory.
+- Issue #5 Rating filter is not preserved while refreshing
+- Issue #6 Changes made on a copied archive file writes to the original archive file
+- Issue #7 When Loupe view is not open, changing rating on thumbnail makes the program throw exception
+- Issue #8 On Ubuntu Numpad Keys and Zooming shortucuts not working
+
+### Changed
+
+- Instead on a separate Convert menu under file, the File -> Open is 
+  modified to automatically handle the legacy binary archives.
+- Instead of filtering on exact focal length, which often comes as 23.2, 34.8 while using zoom lenses, 
+  focal lengths will be grouped in to a range [low - high]. That way focal lengths like 22.8, 23 and 
+  23.5 all comes under the 23mm group. (Planned Feature 001)
+
 ## [0.5.3] - 2026-09-04
 
 ### Fixed

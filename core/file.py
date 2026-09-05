@@ -190,13 +190,6 @@ class File:
             logwriter.warning(str(e))
             return None
 
-    def print(self, prefix: str) -> None:
-        def type_to_str(t):
-            if t== FileType.RAW: return "RAW"
-            if t== FileType.JPG: return "JPG"
-            if t== FileType.LOW: return "LOW"
-        print(prefix + f"[{type_to_str(self.type)}: {self.name}]")
-
     @staticmethod
     def copy_to(src: str, target: str) -> bool:
         src_path = Path(src)

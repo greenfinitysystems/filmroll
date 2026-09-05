@@ -277,20 +277,6 @@ class FujifilmMetadata(Metadata):
 
         return "\n".join(lines)
 
-    def print(self, prefix: str) -> None:
-        super().print(prefix)
-        print(f"{prefix}Film: {self.film}")
-        print(f"{prefix}Color: {self.color}")
-        print(f"{prefix}Shadow: {self.shadow}")
-        print(f"{prefix}Highlight: {self.highlight}")
-        print(f"{prefix}White Balance: {self.white_balance} {self.white_balance_shift}")
-        print(f"{prefix}Dynamic Range: {self.dynamic_range}")
-        print(f"{prefix}Sharpness: {self.sharpness}")
-        print(f"{prefix}Clarity: {self.clarity}")
-        print(f"{prefix}Grain: {self.grain_size} {self.grain_roughness}")
-        print(f"{prefix}Noise Reduction: {self.noise_reduction}")
-        print(f"{prefix}Monochromatic: {self.monochromatic_color}")
-
 # endregion
 
 # region(private_methods)

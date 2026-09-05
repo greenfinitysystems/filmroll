@@ -148,7 +148,7 @@ class ThumbnailGrid(tk.Frame):
 
         if custom_filters is not None:
             self._has_filters = self._copy_filters(custom_filters)
-            if self._has_filters:
+            if self._has_filters or self._rating_filter != 9:
                 self._apply_filters()
 
         self._redraw()
@@ -738,7 +738,7 @@ class ThumbnailGrid(tk.Frame):
         # -------------------------
         # Arrow Keys
         # -------------------------
-        elif event.keysym in ("Left", "Right", "Up", "Down"):
+        elif event.keysym in ("KP_Left", "Left", "KP_Right", "Right", "KP_Up", "Up", "KP_Down", "Down"):
             if self._active_index is None:
                 self._active_index = 0
 
@@ -756,13 +756,13 @@ class ThumbnailGrid(tk.Frame):
             col = current_flat % self._columns
             #
 
-            if event.keysym == "Left":
+            if event.keysym in ("KP_Left", "Left"):
                 col -= 1
-            elif event.keysym == "Right":
+            elif event.keysym in ("KP_Right", "Right"):
                 col += 1
-            elif event.keysym == "Up":
+            elif event.keysym in ("KP_Up", "Up"):
                 row -= 1
-            elif event.keysym == "Down":
+            elif event.keysym in ("KP_Down", "Down"):
                 row += 1
             else:
                 return
@@ -1030,8 +1030,22 @@ class ThumbnailGrid(tk.Frame):
         if self._total_items == 0:
             return
 
+        # print(
+        #     f"keysym={event.keysym!r}, "
+        #     f"keycode={event.keycode!r}, "
+        #     f"char={event.char!r}, "
+        #     f"state={event.state:#x}"
+        # )
+
         ctrl = (event.state & 0x0004) != 0
         shift = (event.state & 0x0001) != 0
+
+        # -------------------------
+        # NumPad Enter
+        # -------------------------
+        if event.keysym in ("KP_Enter"):
+            self._on_open_preview(event)
+            return
 
         # -------------------------
         # Ctrl + H Toggle Hide Rejected
@@ -1053,21 +1067,21 @@ class ThumbnailGrid(tk.Frame):
         # Ctrl + 1, 2, 3, 4, 5, 9 Toggle Rating Filter
         # -------------------------
 
-        if ctrl and event.keysym in ("0", "1", "2", "3", "4", "5", "9"):
+        if ctrl and event.keysym in ("0", "1", "2", "3", "4", "5", "9", "KP_0", "KP_1", "KP_2", "KP_3", "KP_4", "KP_5", "KP_9"):
             self._onkey_toggle_rating(event)
             return
 
         # -------------------------
         # Ctrl + Shift + Del Cull
         # -------------------------
-        if shift and event.keysym == "Delete":
+        if shift and event.keysym in ("Delete", "KP_Delete"):
             self._onkey_shift_delete()
             return
 
         # -------------------------
         # Delete → Toggle Reject
         # -------------------------
-        if event.keysym == "Delete":
+        if event.keysym in ("Delete", "KP_Delete"):
             self._onkey_delete()
             return
 
@@ -1096,11 +1110,11 @@ class ThumbnailGrid(tk.Frame):
         # Shift + Ctrl + Zoom (anchor to active selection)
         # -------------------------
 
-        if shift and ctrl and event.keysym in ("=", "+"):
+        if shift and ctrl and event.keysym in ("KP_Add", "equal", "plus", "=", "+"):
             self._onkey_shift_ctrl_plus()
             return
 
-        if shift and ctrl and event.keysym in ("-", "_"):
+        if shift and ctrl and event.keysym in ("KP_Subtract", "minus", "underscore", "-", "_"):
             self._onkey_shift_ctrl_minus()
             return
 
@@ -1108,11 +1122,11 @@ class ThumbnailGrid(tk.Frame):
         # Ctrl + / Ctrl - Zoom (anchor to active selection)
         # -------------------------
 
-        if ctrl and event.keysym in ("=", "+"):
+        if ctrl and event.keysym in ("KP_Add", "equal", "plus", "=", "+"):
             self._onkey_ctrl_plus()
             return
 
-        if ctrl and event.keysym in ("-"):
+        if ctrl and event.keysym in ("KP_Subtract", "minus", "underscore", "-", "_"):
             self._onkey_ctrl_minus()
             return
 
@@ -1126,14 +1140,14 @@ class ThumbnailGrid(tk.Frame):
         # -------------------------
         # 0, 1, 2, 3 → Rating
         # -------------------------
-        if event.keysym in ("0", "1", "2", "3", "4", "5"):
+        if event.keysym in ("0", "1", "2", "3", "4", "5", "KP_0", "KP_1", "KP_2", "KP_3", "KP_4", "KP_5", "KP_9"):
             self._onkey_apply_rating(event)
             return
 
         # -------------------------
         # Navigate using Arrow keys, Home, End, Page Up/Down etc
         # -------------------------
-        if event.keysym in ("Home", "End", "Next", "Prior", "Left", "Right", "Up", "Down"):
+        if event.keysym in ("Home", "End", "Next", "Prior", "Left", "Right", "Up", "Down", "KP_Up", "KP_Down", "KP_Left", "KP_Right"):
             self._navigate(ctrl, shift, event)
             return
 
@@ -1346,7 +1360,11 @@ class ThumbnailGrid(tk.Frame):
             self.refresh()
 
     def _onkey_apply_rating(self, event):
-        nval = int(event.keysym)
+        if event.char in ('0', '1', '2', '3', '4', '5', '9'):
+            nval = int (event.char)
+        else:
+            nval = int(event.keysym)
+
         stacks = self._get_selected_stacks()
         for stack in stacks:
             stack.metadata.rating = nval
@@ -1356,7 +1374,11 @@ class ThumbnailGrid(tk.Frame):
         self._loupe._redraw()
 
     def _onkey_toggle_rating(self, event):
-        self._rating_filter = int(event.keysym)
+        if event.char in ('0', '1', '2', '3', '4', '5', '9'):
+            self._rating_filter = int (event.char)
+        else:
+            self._rating_filter = int(event.keysym)
+
         self._apply_filters()
         self._redraw()
 

@@ -17,6 +17,8 @@ from core.util import Util, MetadataFilter
 
 class Config:
 
+    __VERSION__ = "0.5.4"
+
 # region(class_methods)
 
     @cache
@@ -47,20 +49,40 @@ class Config:
         self.border_color = "#ffffff"
         self.caption_color = "#000000"
         self.caption_font = "DejaVuSans.ttf"
+        self.xrawstudio_path = r"C:\Program Files\FUJIFILM X RAW STUDIO\FUJIFILM_X_RAW_STUDIO.exe"
+        self.use_focal_groups = 1
         self.focal_groups = [
-            ("Ultra Wide", 0, 18),
-            ("Wide", 18, 35),
-            ("Normal", 35, 50),
-            ("Short Tele", 50, 70),
-            ("Telephoto", 70, 600)
+            ["Ultra Wide",         0.1,   7.0],
+            ["8mm",                7.1,   9.0],
+            ["10mm",               9.1,  12.0],
+            ["13mm",              12.1,  15.0],
+            ["16mm",              15.1,  17.0],
+            ["18mm",              17.1,  19.0],
+            ["20mm",              19.1,  22.0],
+            ["23mm",              22.1,  24.0],
+            ["25mm",              24.1,  26.0],
+            ["27mm",              26.1,  29.0],
+            ["30mm",              29.1,  32.0],
+            ["35mm Class",        32.1,  39.0],
+            ["40mm Class",        39.1,  45.0],
+            ["50mm Class",        45.1,  59.0],
+            ["Short Telephoto",   59.1,  80.0],
+            ["Portrait Telephoto",80.1, 100.0],
+            ["Long Portrait",    100.1, 150.0],
+            ["Long Telephoto",   150.1, 300.0],
+            ["Super Telephoto",  300.1, 500.0],
+            ["Extreme Telephoto",500.1, 600.0],
+            ["Ultra Telephoto",  600.1, 1000.0]
         ]
 
-        self.xrawstudio = r"C:\Program Files\FUJIFILM X RAW STUDIO\FUJIFILM_X_RAW_STUDIO.exe"
-
+        # not being used; always saves after load
         self._to_save = False
+
         self._load()
 
-        if self._to_save: self._save()
+        # if self._to_save: self._save()
+        # always save it back
+        self._save()
         if not (self._asset_path / self._curr_conf["caption_font"]).exists():
             raise RuntimeError(f"Missing Font file {self._curr_conf['caption_font']} while searching in in {str(self._asset_path)}")
 
@@ -166,6 +188,19 @@ class Config:
             pass
 
     @property
+    def use_focal_groups(self) -> int:
+        return self._curr_conf["use_focal_groups"]
+
+    @use_focal_groups.setter
+    def use_focal_groups(self, value) -> int:
+        attrib = "use_focal_groups"
+        try:
+            if isinstance(value, int) and int(value) >= 0:
+                self._curr_conf[attrib] = int(value)
+        except:
+            pass
+
+    @property
     def focal_groups(self) -> list:
         return self._curr_conf["focal_groups"]
 
@@ -173,13 +208,8 @@ class Config:
     def focal_groups(self, value: Any) -> None:
         attrib = "focal_groups"
         try:
-            if len(value) <= 0:
-                return
-            for v in value:
-                if not ((len(v) == 3) and isinstance(v[0], str) and isinstance(v[1], int) and 
-                    isinstance(v[2], int) and (int(v[1]) <= int(v[2]))):
-                    return
-            self._curr_conf[attrib] = value
+            if self._valid_focal_groups(value):
+                self._curr_conf[attrib] = value
         except:
             pass
 
@@ -192,9 +222,9 @@ class Config:
         attrib = "xrawstudio_path"
         try:
             if value is None or str(value) == "":
-                self._curr_conf[attrib] = None 
+                self._curr_conf[attrib] = "" 
             else:
-                self._curr_conf[attrib] = Path(value) if Path(value).exists() else None
+                self._curr_conf[attrib] = value if Path(value).exists() else ""
         except:
             pass
 
@@ -228,7 +258,7 @@ class Config:
 
     @property
     def version(self) -> str:
-        return "0.5.3"
+        return self.__VERSION__
 
     @property
     def about(self) -> str:
@@ -248,10 +278,11 @@ Created by Bibhas Das.
 
     @property
     def metadata_filters(self) -> list:
+        focal_filter = "focal_length" if self.use_focal_groups == 0 else "focal_group"
         return [
             MetadataFilter(property = "camera",         label = "Camera",           values=[], selected_values=[]),
             MetadataFilter(property = "lensmodel",      label = "Lens",             values=[], selected_values=[]),
-            MetadataFilter(property = "focal_length",   label = "Focal Length",     values=[], selected_values=[]),
+            MetadataFilter(property = focal_filter,     label = "Focal Length",     values=[], selected_values=[]),
             MetadataFilter(property = "aperture",       label = "Aperture",         values=[], selected_values=[]),
             MetadataFilter(property = "iso",            label = "ISO",              values=[], selected_values=[]),
             MetadataFilter(property = "film",           label = "Film Simulation",  values=[], selected_values=[]),
@@ -260,6 +291,13 @@ Created by Bibhas Das.
 # endregion
 
 # region(methods)
+
+    def asset(self, value: str) -> Path:
+        return Path(self._asset_path / value)
+
+# endregion
+
+# region (private_methods)
 
     def _save(self):
         try:
@@ -286,11 +324,37 @@ Created by Bibhas Das.
             else:
                 self._curr_conf[key] = curr_conf[key]
 
-    def asset(self, value: str) -> Path:
-        return Path(self._asset_path / value)
+    def _valid_focal_groups(self, intervals):
+        if intervals is None or len(intervals) <= 0:
+            return False
 
-    def print(self) -> None:
-        dumps = json.dumps(self._curr_conf, indent=2)
-        print(dumps)
+        for v in intervals:
+            if (
+                not (len(v) == 3) or 
+                not isinstance(v[0], str) or
+                not isinstance(v[1], float) or 
+                not isinstance(v[2], float)
+            ):
+                return False
+
+            if round(v[1], 1) > round(v[2], 1):
+                return False
+
+        sorted_intervals = sorted(intervals, key=lambda x: x[1])
+
+        # ranges should start from at least 1mm and ends in at least 1000mm
+        if (
+            round(sorted_intervals[0][1], 1) > 1.0 or 
+            round(sorted_intervals[len(sorted_intervals) - 1][2], 1) < 1000.0
+        ):
+            return False
+
+        for i in range(len(sorted_intervals) - 1):
+            curr_max = round(sorted_intervals[i][2], 1)
+            next_min = round(sorted_intervals[i+1][1], 1)
+            if (next_min <= curr_max) or round((next_min - curr_max), 1) > 0.1:
+                return False
+
+        return True
 
 # endregion

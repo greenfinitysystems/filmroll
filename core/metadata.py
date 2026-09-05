@@ -21,6 +21,8 @@ logwriter.setLevel(Config().logger_log_level)
 
 class Metadata:
 
+    _jsonpickle_exclude = {'_focal_group'}
+
 # region(class_methods)
 
     def __init__(self, exif_data: Any):
@@ -95,6 +97,30 @@ class Metadata:
             return str(float(Fraction(value).limit_denominator(10)))
         except:
             return "n/a"
+
+    @property
+    def focal_group(self) -> str:
+        try:
+            if not hasattr(self, '_focal_group'):
+                self._focal_group = None
+
+            if self._focal_group is not None:
+                return self._focal_group
+
+            attrib = 'FocalLength'
+            value = self._data[attrib] if attrib in self._data else ''
+            focal_length = float(Fraction(value).limit_denominator(10))
+
+            cfg = Config()
+    
+            for i, (name, min_val, max_val) in enumerate(cfg.focal_groups):
+                if min_val <= focal_length <= max_val:
+                    self._focal_group = name
+                    return self._focal_group
+        except:
+            pass
+
+        return "n/a"
 
     @property
     def exposure_compensation(self) -> str:
@@ -183,15 +209,6 @@ class Metadata:
 
         return "\n".join(lines)
 
-    def print(self, prefix: str) -> None:
-        print(f"{prefix}Aperture: {self.aperture}")
-        print(f"{prefix}Shutter Speed: {self.shutter_speed}")
-        print(f"{prefix}ISO: {self.iso}")
-        print(f"{prefix}EC: {self.exposure_compensation}")
-        print(f"{prefix}Focal Length: {self.focal_length}")
-        print(f"{prefix}Camera: {self.make} {self.model}")
-        print(f"{prefix}Lens: {self.lensmodel}")
-
 # endregion
 
 # region(private_methods)
@@ -206,4 +223,3 @@ class Metadata:
             pass
 
 # endregion
-

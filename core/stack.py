@@ -152,14 +152,6 @@ class Stack:
             logwriter.warning(f"Unsupported FileType. Throwing TypeError") 
             raise TypeError("Unsupported FileType")  
 
-    def print(self, prefix: str) -> None:
-        print("{")
-        print(prefix + f"id:{self.identity},")
-        if self.raw: self.raw.print(prefix)
-        if self.jpg: self.jpg.print(prefix)
-        if self.low: self.low.print(prefix)
-        print("}")
-
     def exifread(self) -> Any:
         if self.any is None:
             logwriter.warning(f"Empty stack.")
