@@ -45,6 +45,7 @@ class Canvas(tb.Canvas):
         self._nopreview = Config().asset("thumb.jpg")
         
         self._reset()
+        self._pos = i
 
         self.configure(bg="#1e1e1e")
         self.grid(row=i // self._parent._cols, column=i % self._parent._cols, sticky="nsew", pady=(10,10), padx=(10,10))
@@ -57,37 +58,32 @@ class Canvas(tb.Canvas):
         self.bind("<Button-4>", self._on_mouse_scroll)
         self.bind("<Button-5>", self._on_mouse_scroll)
 
-        self.set_pos(i)
+        self.reload()
 
 # endregion
 
 # region(methods)
 
-    def set_pos(self, pos):
-        try:
-            self._pos = pos
-            self._reload()
-            threading.Thread(target=self._compute_histogram, args=()).start()
-            self._reset_pan_zoom()
-            self._redraw()
-        except Exception as e:
-            self._parent._mainfrm.report_error(f"Failed to load image", e)
+    def reload(self):
+        self._reset_image_data()
 
-    def set_display_mode(self, mode: DisplayMode):
-        try:
-            self._display_mode = mode
-            self._reload()
-            self._reset_pan_zoom()
-            self._redraw()
-        except Exception as e:
-            self._parent._mainfrm.report_error(f"Failed to change display mode", e)
+        self._stack = self._parent._stacks[self._pos]
+        if self._display_mode == DisplayMode.raw and self._stack.raw is not None:
+            with rawpy.imread(str(self._stack.raw)) as raw:
+                rgb_array = raw.postprocess(use_camera_wb=True, half_size=True)
+            self._image = ImageOps.exif_transpose(Image.fromarray(rgb_array))
+        elif self._display_mode == DisplayMode.jpeg and self._stack.jpg is not None:
+            self._image = ImageOps.exif_transpose(Image.open(self._stack.jpg))
+        elif self._display_mode == DisplayMode.preview and self._stack.low is not None:
+            self._image = Image.open(self._stack.low)
+        else:
+            self._image = Image.open(self._nopreview)
 
 # endregion
 
 # region(event_handlers)
 
     def _redraw(self, event=None): 
-
         # source type
         def _step_10():
             if self._display_mode == DisplayMode.jpeg: text = "JPG"
@@ -182,33 +178,13 @@ class Canvas(tb.Canvas):
 
         # histogram overlay
         def _step_5():
-            if self._histogram is None:
-                return
+            if hasattr(self, "_histogram_thread") and self._histogram_thread is not None:
+                self._histogram_thread.join()
 
-            bm = int(min(self._rect.height, self._rect.width) * 0.1)
-            lm = int(min(self._rect.height, self._rect.width) * 0.05)
-
-            width = self._histogram.width()
-            height = self._histogram.height()
-
-            hist_rect = Rectangle(
-                left    = self._rect.right - lm - width,
-                top     = self._rect.bottom - bm - height,
-                right   = self._rect.right - lm,
-                bottom  = self._rect.bottom - bm,
-            )
-
-            if not ( 
-                hist_rect.left > self._rect.left and 
-                hist_rect.top > self._rect.top
-            ):
-                return
-
-            self.create_image(
-                hist_rect.left + width//2, 
-                hist_rect.top + height//2,
-                image=self._histogram
-            )
+            if self._histogram is not None:
+                self._redraw_histogram()
+            else:
+                self._histogram_thread = threading.Thread(target=self._redraw_histogram, args=()).start()
 
         # metadata overlay
         def _step_4():
@@ -323,7 +299,36 @@ class Canvas(tb.Canvas):
                 _step_0()
 
         except Exception as e:
-            self._parent._mainfrm.report_error(f"Failed to redraw canvas", e)
+            logwriter.debug(f"Failed to redraw canvas", e)
+
+    def _redraw_histogram(self):
+        if self._histogram is None:
+            self._histogram = self._compute_histogram()
+
+        bm = int(min(self._rect.height, self._rect.width) * 0.1)
+        lm = int(min(self._rect.height, self._rect.width) * 0.05)
+
+        width = self._histogram.width()
+        height = self._histogram.height()
+
+        hist_rect = Rectangle(
+            left    = self._rect.right - lm - width,
+            top     = self._rect.bottom - bm - height,
+            right   = self._rect.right - lm,
+            bottom  = self._rect.bottom - bm,
+        )
+
+        if not ( 
+            hist_rect.left > self._rect.left and 
+            hist_rect.top > self._rect.top
+        ):
+            return
+
+        self.create_image(
+            hist_rect.left + width//2, 
+            hist_rect.top + height//2,
+            image=self._histogram
+        )
 
     def _on_mouse_lbutton_press(self, event):
         self._parent._active_local = self._pos
@@ -403,16 +408,18 @@ class Canvas(tb.Canvas):
         self._display_mode = DisplayMode.preview
         self._stack = None
         self._rect = None
-        self._histogram = None
+        self._reset_image_data()
 
+    def _reset_image_data(self):
         if hasattr(self, "_image") and self._image is not None:
             self._image.close()
-
         self._image = None
 
-        self._reset_pan_zoom()
+        if hasattr(self, "_histogram_thread") and self._histogram_thread is not None:
+            self._histogram_thread.join()
+        self._histogram_thread = None
+        self._histogram = None
 
-    def _reset_pan_zoom(self):
         self._cur_zoom = 0.0
         self._min_zoom = 0.0
         self._zoom_redraw_pending = False
@@ -426,54 +433,6 @@ class Canvas(tb.Canvas):
         self._sync_drag = False
         self._pan_redraw_pending = False
         self._pan_latest_pos = None
-
-    def _compute_histogram(self):
-        stack = self._stack
-
-        f = stack.jpg if stack.jpg is not None else stack.raw
-
-        pb = PreviewBuilder()
-        histogram = pb.compute_histogram(str(f))
-
-        hist_size = (255, 100)
-
-        for hist in histogram:
-            max_v = max(hist)
-            vscale = hist_size[1] / max_v if max_v != 0 else 0
-            for i, v in enumerate(hist):
-                hist[i] = v * vscale
-
-        hscale = hist_size[0] / 255
-        color = ("red", "green", "blue", "white")
-
-        img = Image.new('RGB', hist_size, color='#1e1e1e')
-        draw = ImageDraw.Draw(img)
-
-        for x in range(255):
-            x1 = (x * hscale)
-            x2 = ((x + 1) * hscale)
-            for c, hist in enumerate(histogram):
-                draw.line( [(x1, hist_size[1] - hist[x]), 
-                    (x2, hist_size[1] - hist[x+1])], fill=color[c], width=1)
-
-        self._histogram = ImageTk.PhotoImage(img)
-
-    def _reload(self):
-        if self._image is not None:
-            self._image.close()
-
-        self._stack = self._parent._stacks[self._pos]
-
-        if self._display_mode == DisplayMode.raw and self._stack.raw is not None:
-            with rawpy.imread(str(self._stack.raw)) as raw:
-                rgb_array = raw.postprocess(use_camera_wb=True, half_size=True)
-            self._image = ImageOps.exif_transpose(Image.fromarray(rgb_array))
-        elif self._display_mode == DisplayMode.jpeg and self._stack.jpg is not None:
-            self._image = ImageOps.exif_transpose(Image.open(self._stack.jpg))
-        elif self._display_mode == DisplayMode.preview and self._stack.low is not None:
-            self._image = Image.open(self._stack.low)
-        else:
-            self._image = Image.open(self._nopreview)
 
     def _pan_start(self, event):
         self._drag_start = (event.x, event.y)
@@ -680,6 +639,45 @@ class Canvas(tb.Canvas):
         if self._zoom_latest_pos is not None:
             self._zoom_redraw_pending = True
             self.after(16, self._process_zoom)
+
+    def _compute_histogram(self):
+        pb = PreviewBuilder()
+
+        stack = self._stack
+        
+        if self._display_mode == DisplayMode.raw:
+            if stack.raw is not None:
+                histogram = pb.compute_histogram2(self._image.copy())
+            else:
+                return
+        else:
+            if stack.jpg is not None:
+                histogram = pb.compute_histogram(str(stack.jpg))
+            else:
+                return
+
+        hist_size = (255, 100)
+
+        for hist in histogram:
+            max_v = max(hist)
+            vscale = hist_size[1] / max_v if max_v != 0 else 0
+            for i, v in enumerate(hist):
+                hist[i] = v * vscale
+
+        hscale = hist_size[0] / 255
+        color = ("red", "green", "blue", "white")
+
+        img = Image.new('RGBA', hist_size, (30,30,30,200))
+        draw = ImageDraw.Draw(img)
+
+        for x in range(255):
+            x1 = (x * hscale)
+            x2 = ((x + 1) * hscale)
+            for c, hist in enumerate(histogram):
+                draw.line( [(x1, hist_size[1] - hist[x]), 
+                    (x2, hist_size[1] - hist[x+1])], fill=color[c], width=2)
+
+        return ImageTk.PhotoImage(img)
 
 # endregion
 

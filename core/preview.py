@@ -17,6 +17,7 @@ from scipy.ndimage import gaussian_filter1d
 # region(project_imports)
 
 from core.config import Config
+from core.util import JpegExportTemplate
 
 # endregion
 
@@ -52,18 +53,6 @@ class PreviewBuilder:
 
 # region(methods)
 
-    def generate_preview_file(self, source: str, destination: str, metadata: Any) -> int:
-        th = self._load(source)
-        th, size = self._transform(th, metadata)
-        th.save(destination, quality=90)
-        th.close()
-
-        self._copy_metadata(source, destination)
-
-        logwriter.info(f"Preview generated => {destination}")
-
-        return size
-
     def compute_histogram(self, source: str) -> tuple:
         img = self._load(source)
 
@@ -80,13 +69,53 @@ class PreviewBuilder:
         hist_b = b.histogram()
         hist_b_s = gaussian_filter1d(hist_b, sigma=2)
 
-        img.convert('L')
-        hist_w = img.histogram()
-        hist_w_s = gaussian_filter1d(hist_w, sigma=2)
+        # img.convert('L')
+        # hist_w = img.histogram()
+        # hist_w_s = gaussian_filter1d(hist_w, sigma=2)
 
         img.close()
 
-        return (hist_r_s, hist_g_s, hist_b_s, hist_w_s)
+        # return (hist_r_s, hist_g_s, hist_b_s, hist_w_s)
+        return (hist_r_s, hist_g_s, hist_b_s)
+
+    def compute_histogram2(self, img: Image) -> tuple:
+
+        img.thumbnail((256, 256))
+        
+        r, g, b = img.split()
+
+        hist_r = r.histogram()
+        hist_r_s = gaussian_filter1d(hist_r, sigma=2)
+
+        hist_g = g.histogram()
+        hist_g_s = gaussian_filter1d(hist_g, sigma=2)
+
+        hist_b = b.histogram()
+        hist_b_s = gaussian_filter1d(hist_b, sigma=2)
+
+        # img.convert('L')
+        # hist_w = img.histogram()
+        # hist_w_s = gaussian_filter1d(hist_w, sigma=2)
+
+        img.close()
+
+        # return (hist_r_s, hist_g_s, hist_b_s, hist_w_s)
+        return (hist_r_s, hist_g_s, hist_b_s)
+
+    def export_jpeg(self, source: str, destination: str, template: JpegExportTemplate, metadata: Any):
+        if metadata is None or template is None:
+            logwriter.debug(f"PreviewBuilder.export_jpeg() => either metadata or template argument is None")
+            return 0
+
+        th = self._load(source)
+        th, size = self._transform(th, template, metadata)
+        th.save(destination, quality=template.export_quality)
+        th.close()
+
+        self._copy_metadata(source, destination)
+        logwriter.info(f"Jpeg exported => {destination}")
+
+        return size
 
 # endregion
 
@@ -114,7 +143,114 @@ class PreviewBuilder:
 
         return Image.open(src)
 
-    def _transform(self, img: Image, meta: Any):
+    def _transform(self, img: Image, template: JpegExportTemplate | None, meta: Any):
+        cfg = Config()
+
+        preview_size = template.export_size
+        border_ratio = template.border_size
+        border_color = template.border_color
+        border_exif = template.border_exif
+
+        img = ImageOps.exif_transpose(img)
+
+        if preview_size != 0:
+            img.thumbnail((template.export_size, template.export_size), Image.Resampling.LANCZOS)
+
+        if border_ratio == 0:
+            return img, (img.size[0] * img.size[1])
+
+        border = int(min(img.size) * border_ratio)
+        border_bottom = border if template.border_exif == 0 else int(cfg.border_ratio * 2.5 * min(img.size))
+        img = ImageOps.expand(img, border=(border, border, border, border_bottom), fill=border_color)
+
+        if border_exif == 0:
+            return img, (img.size[0] * img.size[1])
+
+        if meta is None:
+            return img, (img.size[0] * img.size[1])
+
+        film = meta.film if hasattr(meta, "film") else ""
+
+        text_line_1 = (
+            f"{film}, "
+            f"f/{meta.aperture}, "
+            f"{meta.shutter_speed}s, "
+            f"{meta.exposure_compensation} EV, "
+            f"ISO {meta.iso}, "
+            f"{meta.focal_length} mm, "
+        )
+
+        text_line_2 = (
+            f"{meta.make} "
+            f"{meta.model}, "
+            f"{meta.lensmodel}"
+        )
+
+        font_size = int(math.ceil(border_bottom * 14.0/68.3))
+        line1_offset = int(math.ceil(border_bottom * 42.0/68.3))
+        line2_offset = int(math.ceil(border_bottom * 20.0/68.3))
+
+        if font_size in self._font_cache:
+            caption_font = self._font_cache[font_size]
+        else:
+            caption_font = ImageFont.truetype(str(cfg.caption_font), font_size)
+            self._font_cache[font_size] = caption_font
+
+        draw = ImageDraw.Draw(img)
+        bbox = draw.textbbox((0, 0), text_line_1, font=caption_font)
+
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+
+        w, h = img.size
+        draw.text(((w - tw) / 2, h - th - line1_offset), text_line_1, fill=cfg.caption_color, font=caption_font)
+
+        bbox = draw.textbbox((0, 0), text_line_2, font=caption_font)
+
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+
+        draw.text(((w - tw) / 2, h - th - line2_offset), text_line_2, fill=cfg.caption_color, font=caption_font)
+
+        return img, w*h
+
+    def _copy_metadata(self, source: str, destination: str) -> None:
+        # Following section of code will copy the metadata from source image to
+        # our preview image; we may change some values here
+        # but most importatly - will fix the orientation so that someone
+        # openning the image in any viewer does not see double rotation
+
+        # Open source image
+        src_image = exiv2.ImageFactory.open(source)
+        src_image.readMetadata()
+        exif_data = src_image.exifData()
+
+        # EXIF 274 is orientation. Now that we have rotated the image
+        # we will set it to 1 (Normal) so that further image viewers don't
+        # rotate it once again
+        exif_data['Exif.Image.Orientation'] = 1
+
+        # IPTC Data
+        iptc_data = src_image.iptcData()
+
+        # XMP Data
+        xmp_data = src_image.xmpData()
+
+        # Open target JPG image
+        target_image = exiv2.ImageFactory.open(destination)
+
+        # Copy Exif, IPTC, and XMP data blocks to the target
+        target_image.setExifData(exif_data)
+        target_image.setIptcData(iptc_data)
+        target_image.setXmpData(xmp_data)
+
+        # Copy the user comment if it exists
+        target_image.setComment(src_image.comment())
+
+        # Write the changes back to the target file
+        target_image.writeMetadata()
+
+    def _transform_deprecated(self, img: Image, meta: Any):
         cfg = Config()
 
         img = ImageOps.exif_transpose(img)
@@ -173,42 +309,6 @@ class PreviewBuilder:
         draw.text(((w - tw) / 2, h - th - line2_offset), text_line_2, fill=cfg.caption_color, font=caption_font)
 
         return img, w*h
-
-    def _copy_metadata(self, source: str, destination: str) -> None:
-        # Following section of code will copy the metadata from source image to
-        # our preview image; we may change some values here
-        # but most importatly - will fix the orientation so that someone
-        # openning the image in any viewer does not see double rotation
-
-        # Open source image
-        src_image = exiv2.ImageFactory.open(source)
-        src_image.readMetadata()
-        exif_data = src_image.exifData()
-
-        # EXIF 274 is orientation. Now that we have rotated the image
-        # we will set it to 1 (Normal) so that further image viewers don't
-        # rotate it once again
-        exif_data['Exif.Image.Orientation'] = 1
-
-        # IPTC Data
-        iptc_data = src_image.iptcData()
-
-        # XMP Data
-        xmp_data = src_image.xmpData()
-
-        # Open target JPG image
-        target_image = exiv2.ImageFactory.open(destination)
-
-        # Copy Exif, IPTC, and XMP data blocks to the target
-        target_image.setExifData(exif_data)
-        target_image.setIptcData(iptc_data)
-        target_image.setXmpData(xmp_data)
-
-        # Copy the user comment if it exists
-        target_image.setComment(src_image.comment())
-
-        # Write the changes back to the target file
-        target_image.writeMetadata()
 
 # endregion
 

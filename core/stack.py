@@ -32,6 +32,12 @@ class Stack:
         self._metadata = None
         self._rejected = False
 
+    def __getstate__(self):
+        return self.__dict__.copy()
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
 # endregion
 
 # region(properties)

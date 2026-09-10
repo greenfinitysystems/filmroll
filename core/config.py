@@ -17,7 +17,7 @@ from core.util import Util, MetadataFilter
 
 class Config:
 
-    __VERSION__ = "0.5.4"
+    __VERSION__ = "0.6.0"
 
 # region(class_methods)
 
@@ -25,9 +25,11 @@ class Config:
     def __new__(cls, *args, **kwargs):
         return super().__new__(cls)
 
-    def __init__(self):
-        if hasattr(self, "_initialized"):
+    def __init__(self, save=False):
+        if getattr(self, "_initialized", False):
             return
+
+        self._initialized = True
 
         base_path = Path(sys._MEIPASS) if getattr(sys, 'frozen', False) else Path(__file__).parent.parent
         self._asset_path =  base_path / "assets"
@@ -75,14 +77,12 @@ class Config:
             ["Ultra Telephoto",  600.1, 1000.0]
         ]
 
-        # not being used; always saves after load
-        self._to_save = False
-
         self._load()
 
-        # if self._to_save: self._save()
         # always save it back
-        self._save()
+        if save:
+            self._save()
+
         if not (self._asset_path / self._curr_conf["caption_font"]).exists():
             raise RuntimeError(f"Missing Font file {self._curr_conf['caption_font']} while searching in in {str(self._asset_path)}")
 
@@ -93,8 +93,6 @@ class Config:
             filename=self._log_file,
             filemode='a' # 'a' for append, 'w' for overwrite
         )
-
-        self._initialized = True  
 
 # endregion
 
@@ -264,10 +262,10 @@ class Config:
     def about(self) -> str:
         return f"""
 Filmroll is an image transfer, archival and metadata analysis tool dedicated to FUJIFILM Users. \
-Please Note that this is an experimental effort and conineously evolving. \
-The software is being distributed "as-is". The author is not responsible for any \
-data loss, hardware damage during its usage due to program crash or unforeseen situations. \
-Users are cautioned to use it at their own discretion.
+Please Note that this software is continuously evolving and is being distributed "as-is". \
+The author may not be held responsible, to the extent permitted by the law, for any data loss or hardware damage during \
+its usage or due to program crash. Users are cautioned to take backups of important \
+photographs and use it at their own discretion.
 
 Created by Bibhas Das.
 """
@@ -304,7 +302,6 @@ Created by Bibhas Das.
             self._conf_path.mkdir(exist_ok=True)
             with open(self._conf_file, "w") as f:
                 json.dump(self._curr_conf, f, indent=2)
-            self._to_save = False
         except:
             raise RuntimeError("Unable to save config.json")
 
@@ -313,7 +310,6 @@ Created by Bibhas Das.
             with open(self._conf_file, "r") as f:
                 curr_conf = json.load(f)
         except:
-            self._to_save = True
             return
 
         for key in curr_conf.keys():

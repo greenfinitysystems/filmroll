@@ -61,6 +61,11 @@ class CollateJob(NamedTuple):
 class MetadataJob(NamedTuple):
     identity: str
 
+class JpegExportJob(NamedTuple):
+    source: str
+    destination: str
+    metadata: Any
+
 # endregion
 
 # region(other_tuples)
@@ -84,6 +89,14 @@ class Rectangle(NamedTuple):
     @property
     def height(self) -> int:
         return self.bottom - self.top
+
+class JpegExportTemplate(NamedTuple):
+    export_path: str
+    export_size: int
+    export_quality: int
+    border_size: float
+    border_color: str
+    border_exif: int
 
 # endregion
 

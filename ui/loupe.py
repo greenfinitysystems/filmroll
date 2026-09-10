@@ -2,7 +2,6 @@
 
 import logging
 import ttkbootstrap as tb
-import tkinter as tk
 import pyperclip
 
 # endregion
@@ -40,8 +39,10 @@ class Loupe:
         self._reset()
         self._stacks = stacks
 
-        self._root = tk.Toplevel(self._parent)
+        self._root = tb.Toplevel(self._parent._parent._root)
+        self._root.iconphoto(False, self._parent._parent._icon)
         self._root.configure(bg="#1e1e1e")
+
         self._root.update_idletasks()
         self._root.geometry("1000x700")
         self._root.protocol("WM_DELETE_WINDOW", self._on_window_closing)
@@ -58,6 +59,10 @@ class Loupe:
 
         for c in range(self._cols):
             self._root.columnconfigure(c, weight=1)
+
+        if self._canvases is not None:
+            for c in self._canvases:
+                c._reset()
 
         self._canvases = []
         for i in range(count):
@@ -87,6 +92,9 @@ class Loupe:
             logwriter.error(f"Exception occured in Loupe._redraw: {str(e)}")
 
     def _on_window_closing(self):
+        if self._canvases is not None:
+            for c in self._canvases:
+                c._reset()
         self._reset()
 
     def _on_key(self, event):
@@ -172,11 +180,15 @@ class Loupe:
                 len(self._parent._get_visible_indices()) <= 0
             ):
                 return
-    
+
             self._parent._navigate(False, False, event)
-            self._stacks[0] = self._parent._get_active_stack()
+            new_stack = self._parent._get_active_stack()
+            if self._stacks[0].identity == new_stack.identity:
+                return
+
+            self._stacks[0] = new_stack
             self._active_local = 0
-            self._canvases[0].set_pos(0)
+            self._canvases[0].reload()
     
         def _navigate_local():
             count = len(self._stacks)
@@ -229,7 +241,8 @@ class Loupe:
         else: self._display_mode = DisplayMode.preview
 
         for canvas in self._canvases:
-            canvas.set_display_mode(self._display_mode)
+            canvas._display_mode = self._display_mode
+            canvas.reload()
 
         self._redraw()
 
@@ -264,8 +277,8 @@ class Loupe:
         return self._stacks[self._active_local]
 
     def _show_popup_menu(self, x, y):
-        menubutton = tb.Menubutton(self._root, text="Actions", bootstyle="info")
-        popup_menu = tk.Menu(menubutton, tearoff=0)
+        menubutton = tb.Menubutton(self._root, text="Actions", bootstyle="primary")
+        popup_menu = tb.Menu(menubutton, tearoff=0)
         popup_menu.add_command(label="Edit notes...", accelerator="N", command= self._onkey_n)
         popup_menu.add_separator()
         popup_menu.add_command(label="Red", accelerator="1", command= lambda: self._onkey_rating("1"))

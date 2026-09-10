@@ -93,10 +93,6 @@ class AsyncProxy:
         self._host = None
         self._threadpool = ThreadPoolExecutor(max_workers=3)
 
-        # will set the proxy in config for others to pickup
-        # cfg = Config()
-        # cfg._proxy = self
-
         # this is a singleton class. We will not initialize it again
         self._initialized = True
 
@@ -202,9 +198,11 @@ class AsyncProxy:
     def evaluate_async_outcome(self, event) -> bool:
         async_ctrl_res = event.payload
         messages = []
-        if async_ctrl_res.canceled: messages.append(f"User cancelled operation.")
+        if async_ctrl_res.canceled: messages.append(f"Job aborted by user.")
         if async_ctrl_res.error != None: messages.append(f"Exception occured: {str(async_ctrl_res.error)}")
-        if len(messages) > 0: messagebox.showerror("Error", "\n".join(messages))
+        if len(messages) > 0:
+            messagebox.showerror("Error", "\n".join(messages))
+            logwriter.info('\n'.join(messages))
         return len(messages) <= 0
 
     # returns all necessary control variables as a NamedTuple

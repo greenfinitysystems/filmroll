@@ -37,66 +37,44 @@ class Metadata:
         Metadata._read_entry(exif_data, self._data, "Exif.Photo.LensModel")
         Metadata._read_entry(exif_data, self._data, "Exif.Photo.ExposureBiasValue")
 
-        # additional values which will be read from
-        # iptc/xmp data in future; these are editable by user
-        self.rating = 0
-        self.comment = ""
-        self.tags = ""
-
 # endregion
 
 # region(properties)
 
     @property
     def make(self) -> str:
-        attrib = 'Make'
-        return self._data[attrib] if attrib in self._data else ''
+        return self._data.get('Make', '')
 
     @property
     def model(self) -> str:
-        attrib = 'Model'
-        return self._data[attrib] if attrib in self._data else ''
+        return self._data.get('Model', '')
 
     @property
     def camera(self) -> str:
-        return self.make + ' ' + self.model
+        return f"{self.make} {self.model}"
 
     @property
     def lensmodel(self) -> str:
-        attrib = 'LensModel'
-        return self._data[attrib] if attrib in self._data else ''
+        return self._data.get('LensModel', '')
 
     @property
     def iso(self) -> str:
-        attrib = 'ISOSpeedRatings'
-        return str(self._data[attrib]) if attrib in self._data else ''
+        return self._data.get('ISOSpeedRatings', '')
 
     @property
     def aperture(self) -> str:
-        attrib = 'FNumber'
-        try:
-            value = self._data[attrib] if attrib in self._data else ''
-            return str(float(Fraction(value).limit_denominator(10)))
-        except:
-            return "n/a"
+        try: return str(float(Fraction(self._data.get('FNumber', '')).limit_denominator(10)))
+        except: return ''
 
     @property
     def shutter_speed(self) -> str:
-        attrib = 'ExposureTime'
-        try:
-            value = self._data[attrib] if attrib in self._data else ''
-            return str(Fraction(value))
-        except:
-            return "n/a"
+        try: return str(Fraction(self._data.get('ExposureTime', '')))
+        except: return ''
 
     @property
     def focal_length(self) -> str:
-        attrib = 'FocalLength'
-        try:
-            value = self._data[attrib] if attrib in self._data else ''
-            return str(float(Fraction(value).limit_denominator(10)))
-        except:
-            return "n/a"
+        try: return str(float(Fraction(self._data.get('FocalLength', ''))))
+        except: return ''
 
     @property
     def focal_group(self) -> str:
@@ -107,9 +85,7 @@ class Metadata:
             if self._focal_group is not None:
                 return self._focal_group
 
-            attrib = 'FocalLength'
-            value = self._data[attrib] if attrib in self._data else ''
-            focal_length = float(Fraction(value).limit_denominator(10))
+            focal_length = float(Fraction(self._data.get('FocalLength', '')).limit_denominator(10))
 
             cfg = Config()
     
@@ -120,78 +96,58 @@ class Metadata:
         except:
             pass
 
-        return "n/a"
+        return 'n/a'
 
     @property
     def exposure_compensation(self) -> str:
-        attrib = 'ExposureBiasValue'
-        raw_value = self._data[attrib] if attrib in self._data else ''
-
         try:
-            f = Fraction(raw_value).limit_denominator(10)
-            v = float(f)
+            raw_value = self._data.get('ExposureBiasValue', '0')
+            if raw_value == '0':
+                return '0'
+
+            v = float(Fraction(raw_value).limit_denominator(10))
             i_part = int(v)
             f_part = Fraction(v - i_part).limit_denominator(10)
-            s_val = ""
-            if i_part != 0: s_val = f"{i_part:+}"
-            if f_part == 0: return "0"
-            if i_part != 0: s_val += f" {f_part}"
-            else: s_val += f"{f_part:+}"
+
+            s_val = '0'
+
+            if i_part != 0: 
+                s_val = f"{i_part:+}"
+                if f_part != 0:
+                    s_val += f" {f_part}"
+            else:
+                if f_part != 0:
+                    s_val = f"{f_part:+}"
+
             return s_val
+
         except:
-            return "0"
+            return '0'
 
     @property
-    def rating(self) -> str:
-        attrib = 'rating'
-        try:
-            value = self._data[attrib] if attrib in self._data else '0'
-            return value
-        except:
-            return "n/a"
+    def rating(self) -> int:
+        try: return int(self._data.get('rating', 0))
+        except: return 0
 
     @rating.setter
     def rating(self, value: int) -> None:
-        attrib = 'rating'
-        try:
-            v = int(value)
-            self._data[attrib] = value
-        except:
-            pass
+        self._data['rating'] = int(value)
 
     @property
     def comment(self) -> str:
-        attrib = 'comment'
-        try:
-            value = str(self._data[attrib]) if attrib in self._data else '0'
-            return value
-        except:
-            return "n/a"
+        return self._data.get('comment', '')
 
     @comment.setter
     def comment(self, value: str) -> None:
-        attrib = 'comment'
-        try:
-            self._data[attrib] = value
-        except:
-            pass
+        self._data['comment'] = value
 
     @property
     def tags(self) -> str:
-        attrib = 'tags'
-        try:
-            value = str(self._data[attrib]) if attrib in self._data else '0'
-            return value
-        except:
-            return "n/a"
+        return self._data.get('tags', '')
 
     @comment.setter
     def tags(self, value: str) -> None:
-        attrib = 'tags'
-        try:
-            self._data[attrib] = value
-        except:
-            pass
+        self._data['tags'] = value
 
 # endregion
 

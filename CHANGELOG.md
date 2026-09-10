@@ -1,4 +1,30 @@
 All notable changes to Filmroll are documented here.
+## [0.6.0] - 2026-09-10
+
+### Fixed
+- Multiple navigation issues
+- Migrate legacy archives to newer version
+- Glitches in multi-process handling
+- Application icon now appearing correctly
+- Occassionally configuration file was not saving properly
+- On Windows Enter button on gallery was not working properly
+- Progressbar in the status area is now more prominent
+- Application crash protection
+- raw image was showing wrong histogram - now fixed
+
+### Changed
+- Updated archive schema
+- Look and feel of dialogs is now in sync with main theme
+- Build Previews 
+- Rebuild All Previews
+- Export Jpegs feature now allows resizing and adding border and metadata
+- Instead of default System Messageboxes, Themed Messageboxes is introduced
+- Performance Improvement
+- About Statement
+- In single image Loupe mode histogram display will turn off if in Loupe window 
+  when browsing left right to increase browsing speed. It will also turnoff if changing to a different display mode
+  like jpg to raw etc
+- Computation of histogram is now asynchronus thereby allowing faster browsing
 
 ## [0.5.4] - 2026-09-06
 

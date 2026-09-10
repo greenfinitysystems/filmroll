@@ -2,17 +2,16 @@
 
 import logging
 import ttkbootstrap as tb
-import tkinter as tk
 from PIL import Image, ImageTk
 from enum import Enum
 from typing import Any
+from ui.messagebox import messagebox
 
 # endregion
 
 # region(project_imports)
 
 from core.config import Config
-from core.file import FileType
 from core.archive import Archive
 from ui.dialog import FilterDialog
 from ui.loupe import Loupe
@@ -55,35 +54,35 @@ class PreviewMenu(Enum):
 
 # endregion
 
-class ThumbnailGrid(tk.Frame):
+class ThumbnailGrid(tb.Frame):
 
 # region(class_methods)
 
-    def __init__(self, parent, menu, win):
+    def __init__(self, parent, win):
         super().__init__(parent)
 
         # rating filter apply
         self._rating_filter = 9
         self._has_filters = False
 
-        self._mainfrm = win
-        self._menubar = self._mainfrm.menubar
+        self._parent = win
+        self._menubar = self._parent.menubar
 
-        self._edit_menu = tk.Menu(self._menubar, tearoff=0, postcommand=self._on_edit_menu_unfold)
+        self._edit_menu = tb.Menu(self._menubar, tearoff=0, postcommand=self._on_edit_menu_unfold)
         self._edit_menu.add_command(label="Select All", command=self._onkey_ctrl_a, accelerator="Ctrl+A")
         self._edit_menu.add_command(label="Reject", command=self._onkey_delete, accelerator="Del")
         self._edit_menu.add_command(label="Cull", command=self._onkey_shift_delete, accelerator="Ctrl+Shift+Del")
         self._edit_menu.add_separator()
         self._edit_menu.add_command(label="Apply Filter...", command=self._onkey_ctrl_f, accelerator="Ctrl+F")
         self._edit_menu.add_separator()
-        self._edit_menu.add_command(label="Export Raw...", command=self._on_edit_copy_raw)
-        self._edit_menu.add_command(label="Export Jpeg", command=self._on_edit_copy_jpg)
+        self._edit_menu.add_command(label="Export Raw...", command=self._on_edit_export_raws)
+        self._edit_menu.add_command(label="Export Jpeg...", command=self._on_edit_export_jpegs)
 
-        self._preview_menu = tk.Menu(self._menubar, tearoff=0, postcommand=self._on_preview_menu_unfold)
+        self._preview_menu = tb.Menu(self._menubar, tearoff=0, postcommand=self._on_preview_menu_unfold)
         self._preview_menu.add_command(label="Build", command=self._onkey_b, accelerator="B")
         self._preview_menu.add_command(label="Rebuild All", command=self._onkey_ctrl_b, accelerator="Ctrl+B")
 
-        self._view_menu = tk.Menu(self._menubar, tearoff=0, postcommand=self._on_view_menu_unfold)
+        self._view_menu = tb.Menu(self._menubar, tearoff=0, postcommand=self._on_view_menu_unfold)
         self._view_menu.add_command(label="Hide Rejected", command=self._onkey_ctrl_h, accelerator="Ctrl+H")
         self._view_menu.add_command(label="Zoom In", command=self._onkey_ctrl_plus, accelerator="Ctrl+")
         self._view_menu.add_command(label="Zoom Out", command=self._onkey_ctrl_minus, accelerator="Ctrl-")
@@ -128,6 +127,8 @@ class ThumbnailGrid(tk.Frame):
 # region(methods)
 
     def set_doc(self, archive: Archive, custom_filters: list = None):
+        if archive is None: return
+
         if self._doc: self.unset_doc()
 
         self._doc = archive
@@ -142,7 +143,7 @@ class ThumbnailGrid(tk.Frame):
         self._menubar.insert_cascade("Preview", label="Edit", menu=self._edit_menu)
 
         ds = f"PRE {self._total_items} DOC {self._doc.file_count}"
-        self._mainfrm.docstat.set(ds)
+        self._parent.docstat.set(ds)
 
         self._filters = self._doc.get_filters()
 
@@ -152,6 +153,8 @@ class ThumbnailGrid(tk.Frame):
                 self._apply_filters()
 
         self._redraw()
+        self._canvas.focus_set()
+
         return True
 
     def unset_doc(self):
@@ -159,7 +162,7 @@ class ThumbnailGrid(tk.Frame):
             self._menubar.delete('Edit')
             self._menubar.delete('Preview')
             self._menubar.delete('View')
-            self._mainfrm.docstat.set("PRE 0 DOC 0")
+            self._parent.docstat.set("PRE 0 DOC 0")
         except:
             pass
 
@@ -292,9 +295,9 @@ class ThumbnailGrid(tk.Frame):
             )
 
         flt = "-" if self._rating_filter == 9 else str(self._rating_filter)
-        if hasattr(self._mainfrm, "selstat"):
+        if hasattr(self._parent, "selstat"):
             ds = f"SEL {len(self._selected_indices)} FLT {flt}"
-            self._mainfrm.selstat.set(ds)
+            self._parent.selstat.set(ds)
 
         self._canvas.delete("thumb")
 
@@ -327,7 +330,6 @@ class ThumbnailGrid(tk.Frame):
                 y = row * cell
 
                 img = self._load_image(index)
-
                 iid = self._canvas.create_image(
                     x + self._thumb_size // 2,
                     y + self._thumb_size // 2,
@@ -384,9 +386,15 @@ class ThumbnailGrid(tk.Frame):
             return self._image_cache[key]
 
         path = self._nopreview if self._items[index].nopreview else self._items[index].low
-        img = Image.open(path)
-        img.thumbnail((self._thumb_size, self._thumb_size))
 
+        try:
+            img = Image.open(path)
+
+        except Exception as e:
+            logwriter.error(f"Exception in Thumbnailgrid._load_image() {str(e)}")
+            img = Image.open(self._nopreview)
+
+        img.thumbnail((self._thumb_size, self._thumb_size))
         tk_img = ImageTk.PhotoImage(img)
         self._image_cache[key] = tk_img
 
@@ -1040,20 +1048,46 @@ class ThumbnailGrid(tk.Frame):
         ctrl = (event.state & 0x0004) != 0
         shift = (event.state & 0x0001) != 0
 
-        # -------------------------
-        # NumPad Enter
-        # -------------------------
-        if event.keysym in ("KP_Enter"):
-            self._on_open_preview(event)
-            return
+        # -------------------------------------------------------------------
+        # Ctrl + Shift + Key
+        # -------------------------------------------------------------------
 
         # -------------------------
-        # Ctrl + H Toggle Hide Rejected
+        # Ctrl + Shift + Del Cull
+        # -------------------------
+        if shift and event.keysym in ("Delete", "KP_Delete"):
+            self._onkey_shift_delete()
+            return "break"
+
+        # -------------------------
+        # Ctrl + Shift + Zoom (anchor to active selection)
         # -------------------------
 
-        if ctrl and event.keysym.lower() == "h":
-            self._onkey_ctrl_h()
-            return
+        if shift and ctrl and event.keysym in ("KP_Add", "equal", "plus", "=", "+"):
+            self._onkey_shift_ctrl_plus()
+            return "break"
+
+        if shift and ctrl and event.keysym in ("KP_Subtract", "minus", "underscore", "-", "_"):
+            self._onkey_shift_ctrl_minus()
+            return "break"
+
+        # -------------------------------------------------------------------
+        # Ctrl + Key
+        # -------------------------------------------------------------------
+
+        # -------------------------
+        # Ctrl + A Select All
+        # -------------------------
+        if ctrl and event.keysym.lower() == "a":
+            self._onkey_ctrl_a()
+            return "break"
+
+        # -------------------------
+        # Ctrl + B Rebuild All Previews
+        # -------------------------
+        if ctrl and event.keysym.lower() == "b":
+            self._onkey_ctrl_b()
+            return "break"
 
         # -------------------------
         # Ctrl + F Apply Filter
@@ -1061,7 +1095,22 @@ class ThumbnailGrid(tk.Frame):
 
         if ctrl and event.keysym.lower() == "f":
             self._onkey_ctrl_f()
-            return
+            return "break"
+
+        # -------------------------
+        # Ctrl + H Toggle Hide Rejected
+        # -------------------------
+
+        if ctrl and event.keysym.lower() == "h":
+            self._onkey_ctrl_h()
+            return "break"
+
+        # -------------------------
+        # Ctrl + R Rebuild Previews
+        # -------------------------
+        if ctrl and event.keysym.lower() == "r":
+            self._onkey_ctrl_r()
+            return "break"
 
         # -------------------------
         # Ctrl + 1, 2, 3, 4, 5, 9 Toggle Rating Filter
@@ -1069,54 +1118,7 @@ class ThumbnailGrid(tk.Frame):
 
         if ctrl and event.keysym in ("0", "1", "2", "3", "4", "5", "9", "KP_0", "KP_1", "KP_2", "KP_3", "KP_4", "KP_5", "KP_9"):
             self._onkey_toggle_rating(event)
-            return
-
-        # -------------------------
-        # Ctrl + Shift + Del Cull
-        # -------------------------
-        if shift and event.keysym in ("Delete", "KP_Delete"):
-            self._onkey_shift_delete()
-            return
-
-        # -------------------------
-        # Delete → Toggle Reject
-        # -------------------------
-        if event.keysym in ("Delete", "KP_Delete"):
-            self._onkey_delete()
-            return
-
-        # -------------------------
-        # Ctrl + R Rebuild Previews
-        # -------------------------
-        if ctrl and event.keysym.lower() == "r":
-            self._onkey_ctrl_r()
-            return
-
-        # -------------------------
-        # F5 Refresh
-        # -------------------------
-        if event.keysym == "F5":
-            self._onkey_f5()
-            return
-
-        # -------------------------
-        # F11 Full Screen
-        # -------------------------
-        if event.keysym == "F11":
-            self._onkey_f11()
-            return
-
-        # -------------------------
-        # Shift + Ctrl + Zoom (anchor to active selection)
-        # -------------------------
-
-        if shift and ctrl and event.keysym in ("KP_Add", "equal", "plus", "=", "+"):
-            self._onkey_shift_ctrl_plus()
-            return
-
-        if shift and ctrl and event.keysym in ("KP_Subtract", "minus", "underscore", "-", "_"):
-            self._onkey_shift_ctrl_minus()
-            return
+            return "break"
 
         # -------------------------
         # Ctrl + / Ctrl - Zoom (anchor to active selection)
@@ -1124,46 +1126,65 @@ class ThumbnailGrid(tk.Frame):
 
         if ctrl and event.keysym in ("KP_Add", "equal", "plus", "=", "+"):
             self._onkey_ctrl_plus()
-            return
+            return "break"
 
         if ctrl and event.keysym in ("KP_Subtract", "minus", "underscore", "-", "_"):
             self._onkey_ctrl_minus()
-            return
+            return "break"
+
+        # -------------------------------------------------------------------
+        # Key
+        # -------------------------------------------------------------------
 
         # -------------------------
-        # Select All
+        # NumPad Enter
         # -------------------------
-        if ctrl and event.keysym.lower() == "a":
-            self._onkey_ctrl_a()
-            return
+        if event.keysym in ("KP_Enter",):
+            self._on_open_preview(event)
+            return "break"
+        
+        # -------------------------
+        # Delete → Toggle Reject
+        # -------------------------
+        if event.keysym in ("Delete", "KP_Delete"):
+            self._onkey_delete()
+            return "break"
+
+        # -------------------------
+        # F5 Refresh
+        # -------------------------
+        if event.keysym == "F5":
+            self._onkey_f5()
+            return "break"
+
+        # -------------------------
+        # F11 Full Screen
+        # -------------------------
+        if event.keysym == "F11":
+            self._onkey_f11()
+            return "break"
 
         # -------------------------
         # 0, 1, 2, 3 → Rating
         # -------------------------
         if event.keysym in ("0", "1", "2", "3", "4", "5", "KP_0", "KP_1", "KP_2", "KP_3", "KP_4", "KP_5", "KP_9"):
             self._onkey_apply_rating(event)
-            return
+            return "break"
 
         # -------------------------
         # Navigate using Arrow keys, Home, End, Page Up/Down etc
         # -------------------------
         if event.keysym in ("Home", "End", "Next", "Prior", "Left", "Right", "Up", "Down", "KP_Up", "KP_Down", "KP_Left", "KP_Right"):
             self._navigate(ctrl, shift, event)
-            return
+            return "break"
 
         # -------------------------
         # Build Previews
         # -------------------------
         if event.keysym.lower() == "b":
             self._onkey_b()
-            return
-
-         # -------------------------
-        # Rebuild All Previews
-        # -------------------------
-        if ctrl and event.keysym.lower() == "b":
-            self._onkey_ctrl_b()
-            return
+            return "break"
+        
 
     def _on_resize(self, event: Any):
         self._redraw()
@@ -1300,7 +1321,7 @@ class ThumbnailGrid(tk.Frame):
 
     def _onkey_f11(self):
         self._fullscreen = not self._fullscreen
-        self._mainfrm.root.attributes("-fullscreen", self._fullscreen)
+        self._parent._root.attributes("-fullscreen", self._fullscreen)
 
     def _onkey_ctrl_f(self):
         # remove the previously applied filters
@@ -1312,7 +1333,7 @@ class ThumbnailGrid(tk.Frame):
 
         # ask user for filter parameters
         # if custom_filter is not None, it will simply apply the supplied filters
-        if FilterDialog(self._mainfrm.root, self._filters).show():
+        if FilterDialog(self._parent._root, self._filters).show():
             self._apply_filters()
             self._has_filters = True
             self._redraw()
@@ -1321,19 +1342,6 @@ class ThumbnailGrid(tk.Frame):
     def _onkey_ctrl_a(self):
         self._selected_indices = self._visible_indices.copy()
         self._render_visible()
-
-    def _onkey_delete(self):
-        selected = self._get_selected_stacks()
-        for stack in selected:
-            stack.rejected = not stack.rejected
-        self._doc.save()
-
-        self._redraw()
-        self._loupe._redraw()       
-
-    def _onkey_shift_delete(self):
-        if self._doc and self._doc.ready:
-            self._mainfrm.on_edit_cull()
 
     def _onkey_ctrl_h(self):
         self._hide_rejected = not self._hide_rejected
@@ -1359,20 +1367,6 @@ class ThumbnailGrid(tk.Frame):
         if self._doc and self._doc.ready:
             self.refresh()
 
-    def _onkey_apply_rating(self, event):
-        if event.char in ('0', '1', '2', '3', '4', '5', '9'):
-            nval = int (event.char)
-        else:
-            nval = int(event.keysym)
-
-        stacks = self._get_selected_stacks()
-        for stack in stacks:
-            stack.metadata.rating = nval
-        self._doc.save()
-
-        self._redraw()
-        self._loupe._redraw()
-
     def _onkey_toggle_rating(self, event):
         if event.char in ('0', '1', '2', '3', '4', '5', '9'):
             self._rating_filter = int (event.char)
@@ -1382,22 +1376,71 @@ class ThumbnailGrid(tk.Frame):
         self._apply_filters()
         self._redraw()
 
-    def _on_edit_copy_raw(self):
-        stacks = self._get_selected_stacks()
-        if len(stacks) > 0:
-            self._mainfrm.on_edit_copy_files(stacks, FileType.RAW)
+    # document modifications
 
-    def _on_edit_copy_jpg(self):
+    def _onkey_apply_rating(self, event):
+        if not self._doc or not self._doc.ready:
+            return
+
+        if event.char in ('0', '1', '2', '3', '4', '5', '9'):
+            nval = int (event.char)
+        else:
+            nval = int(event.keysym)
+
         stacks = self._get_selected_stacks()
-        if len(stacks) > 0:
-            self._mainfrm.on_edit_copy_files(stacks, FileType.JPG)
+        for stack in stacks:
+            stack.metadata.rating = nval
+
+        try:
+            self._doc.save()
+            self._redraw()
+            self._loupe._redraw()
+
+        except Exception as e:
+            logwriter.error(f"Error in Thumbnailgrid._onkey_apply_rating() {str(e)}")
+            messagebox.showerror(f"Error in Thumbnailgrid._onkey_apply_rating() {str(e)}", parent=self)
+
+    def _onkey_delete(self):
+        if not self._doc or not self._doc.ready:
+            return
+
+        selected = self._get_selected_stacks()
+        for stack in selected:
+            stack.rejected = not stack.rejected
+
+        try:
+            self._doc.save()
+            self._redraw()
+            self._loupe._redraw()
+
+        except Exception as e:
+            logwriter.error(f"Error in Thumbnailgrid._onkey_apply_rating() {str(e)}")
+            messagebox.showerror(f"Error in Thumbnailgrid._onkey_apply_rating() {str(e)}", parent=self)  
+
+    # mainwindow delegations
+
+    def _onkey_shift_delete(self):
+        if self._doc and self._doc.ready:
+            self._parent.on_edit_cull()
+
+    def _on_edit_export_raws(self):
+        if self._doc is not None and self._doc.ready:
+            stacks = self._get_selected_stacks()
+            if len(stacks) > 0:
+                self._parent.on_edit_export_raws(stacks)
+
+    def _on_edit_export_jpegs(self):
+        if self._doc is not None and self._doc.ready:
+            stacks = self._get_selected_stacks()
+            if len(stacks) > 0:
+                self._parent.on_edit_export_jpegs(stacks)
 
     def _onkey_b(self, event=None):
-         if self._doc and self._doc.ready:
-            self._mainfrm.on_preview_rebuild(self._get_selected_stacks())
+         if self._doc is not None and self._doc.ready:
+            self._parent.on_preview_rebuild_previews(self._get_selected_stacks())
 
     def _onkey_ctrl_b(self):
-        if self._doc and self._doc.ready:
-            self._mainfrm.on_preview_rebuild(None)
+        if self._doc is not None and self._doc.ready:
+            self._parent.on_preview_rebuild_previews(self._doc.as_list())
 
 # endregion

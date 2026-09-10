@@ -52,7 +52,7 @@ class FujifilmMetadata(Metadata):
     def sharpness(self) -> str:
         attrib = 'Sharpness'
         try:
-            raw_value = self._data[attrib] if attrib in self._data else None
+            raw_value = self._data.get(attrib, None)
             return self._lookup(int(raw_value), FujifilmLut.lut_sharpness)
         except:
             return "n/a"
@@ -61,7 +61,7 @@ class FujifilmMetadata(Metadata):
     def white_balance(self) -> str:     
         attrib = 'WhiteBalance'
         try:
-            raw_value = self._data[attrib] if attrib in self._data else None
+            raw_value = self._data.get(attrib, None)
             wb = self._lookup(int(raw_value), FujifilmLut.lut_white_balance)
             return wb if wb != "Kelvin" else f"{self.color_temperature}K"
         except:
@@ -70,7 +70,7 @@ class FujifilmMetadata(Metadata):
     @property
     def white_balance_r_shift(self) -> str:
         attrib = 'WhiteBalanceFineTune'
-        raw_value = self._data[attrib] if attrib in self._data else None
+        raw_value = self._data.get(attrib, None)
 
         try:
             parts = str(raw_value).split(' ')
@@ -85,7 +85,7 @@ class FujifilmMetadata(Metadata):
     @property
     def white_balance_b_shift(self) -> str:
         attrib = 'WhiteBalanceFineTune'
-        raw_value = self._data[attrib] if attrib in self._data else None
+        raw_value = self._data.get(attrib, None)
 
         try:
             parts = str(raw_value).split(' ')
@@ -105,7 +105,7 @@ class FujifilmMetadata(Metadata):
     def color(self) -> str: 
         attrib = 'Color'
         try:
-            raw_value = self._data[attrib] if attrib in self._data else None
+            raw_value = self._data.get(attrib, None)
             return self._lookup(int(raw_value), FujifilmLut.lut_color)
         except:
             return "n/a"
@@ -114,7 +114,7 @@ class FujifilmMetadata(Metadata):
     def noise_reduction(self) -> str: 
         attrib = 'HighIsoNoiseReduction'
         try:
-            raw_value = self._data[attrib] if attrib in self._data else None
+            raw_value = self._data.get(attrib, None)
             return self._lookup(int(raw_value), FujifilmLut.lut_noise_reduction)
         except:
             return "n/a"
@@ -123,7 +123,7 @@ class FujifilmMetadata(Metadata):
     def clarity(self) -> str: 
         attrib = 'Clarity'
         try:
-            raw_value = self._data[attrib] if attrib in self._data else None
+            raw_value = self._data.get(attrib, None)
             return self._lookup(int(raw_value), FujifilmLut.lut_clarity)
         except:
             return "n/a"
@@ -132,7 +132,7 @@ class FujifilmMetadata(Metadata):
     def shadow(self) -> str: 
         attrib = 'ShadowTone'
         try:
-            raw_value = self._data[attrib] if attrib in self._data else None
+            raw_value = self._data.get(attrib, None)
             return self._lookup(int(raw_value), FujifilmLut.lut_shadow)
         except:
             return "n/a"
@@ -141,7 +141,7 @@ class FujifilmMetadata(Metadata):
     def highlight(self) -> str: 
         attrib = 'HighlightTone'
         try:
-            raw_value = self._data[attrib] if attrib in self._data else None
+            raw_value = self._data.get(attrib, None)
             return self._lookup(int(raw_value), FujifilmLut.lut_highlight)
         except:
             return "n/a"
@@ -150,7 +150,7 @@ class FujifilmMetadata(Metadata):
     def dynamic_range(self) -> str: 
         attrib = 'DevelopmentDynamicRange'
         try:
-            raw_value = self._data[attrib] if attrib in self._data else None
+            raw_value = self._data.get(attrib, None)
             return self._lookup(int(raw_value), FujifilmLut.lut_dynamic_range)
         except:
             return "n/a"
@@ -159,7 +159,7 @@ class FujifilmMetadata(Metadata):
     def grain_roughness(self) -> str: 
         attrib = 'GrainEffectRoughness'
         try:
-            raw_value = self._data[attrib] if attrib in self._data else None
+            raw_value = self._data.get(attrib, None)
             return self._lookup(int(raw_value), FujifilmLut.lut_grain_roughness)
         except:
             return "n/a"
@@ -168,7 +168,7 @@ class FujifilmMetadata(Metadata):
     def grain_size(self) -> str: 
         attrib = 'GrainEffectSize'
         try:
-            raw_value = self._data[attrib] if attrib in self._data else None
+            raw_value = self._data.get(attrib, None)
             return self._lookup(int(raw_value), FujifilmLut.lut_grain_size)
         except:
             return "n/a"
@@ -177,7 +177,7 @@ class FujifilmMetadata(Metadata):
     def color_chrome_effect(self) -> str: 
         attrib = 'ColorChromeEffect'
         try:
-            raw_value = self._data[attrib] if attrib in self._data else None
+            raw_value = self._data.get(attrib, None)
             return self._lookup(int(raw_value), FujifilmLut.lut_color_chrome_effect)
         except:
             return "n/a"
@@ -186,7 +186,7 @@ class FujifilmMetadata(Metadata):
     def color_chrome_fx_blue(self) -> str: 
         attrib = 'ColorChromeFXBlue'
         try:
-            raw_value = self._data[attrib] if attrib in self._data else None
+            raw_value = self._data.get(attrib, None)
             return self._lookup(int(raw_value), FujifilmLut.lut_color_chrome_fx_blue)
         except:
             return "n/a"
@@ -195,7 +195,7 @@ class FujifilmMetadata(Metadata):
     def film(self) -> str: 
         attrib = 'FilmMode'
         try:
-            raw_value = self._data[attrib] if attrib in self._data else None
+            raw_value = self._data.get(attrib, None)
             if raw_value is not None:
                 return self._lookup(int(raw_value), FujifilmLut.lut_film)
             return self.color
@@ -205,13 +205,14 @@ class FujifilmMetadata(Metadata):
     @property
     def monochromatic_color(self) -> str: 
         attrib = 'MonochromaticColorWC'
-        wc = self._data[attrib] if attrib in self._data else None
+        wc = self._data.get(attrib, None)
 
         try: wc_str = f"WC {int(wc):+.0f} " if wc is not None else ""
         except: wc_str = ""
 
         attrib = 'MonochromaticColorMG'
-        mg = self._data[attrib] if attrib in self._data else None
+        mg = self._data.get(attrib, None)
+
         try: mg_str = f"MG {int(mg):+.0f}" if mg is not None else ""
         except: mg_str = ""
 

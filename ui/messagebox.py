@@ -1,6 +1,6 @@
 # region(python_imports)
 
-from tkinter import messagebox as mb
+from ttkbootstrap.dialogs import Messagebox
 
 # endregion
 
@@ -22,14 +22,18 @@ class messagebox:
 
     @staticmethod
     def showinfo(title, message):
-        mb.showinfo(title, message)
+        Messagebox.show_info(message, title)
 
     @staticmethod
-    def askyesno(title, message):
-        return mb.askyesno(title, message)
+    def askyesno(message, title):
+        response = Messagebox.yesno(title, message)
+        if response in ('Yes', 'yes', True):
+            return True
+        return False
 
     @staticmethod
-    def showerror(title, message):
-        mb.showerror(title, message)
+    def showerror(message, title):
+        Messagebox.show_error(title, message)
 
 # endregion
+

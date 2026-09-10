@@ -54,7 +54,6 @@ class File:
         self._identity = None
         self._image_size = 0
         self._filetype = None
-        self._image_size = 0
         self._mtime = None
         self._file_size = -1
 
@@ -112,6 +111,12 @@ class File:
 
     def __truediv__(self, other):
         return Path(self._path) / other
+
+    def __getstate__(self):
+        return self.__dict__.copy()
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
 
 # endregion
 
