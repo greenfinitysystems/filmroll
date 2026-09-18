@@ -1,4 +1,3 @@
-# import ttkbootstrap as tb
 import multiprocessing
 from ui.mainwindow import FilmrollGUI
 

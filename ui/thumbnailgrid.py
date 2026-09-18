@@ -1,18 +1,17 @@
 # region(python_imports)
 
 import logging
-import ttkbootstrap as tb
-from PIL import Image, ImageTk
 from enum import Enum
 from typing import Any
-from ui.messagebox import messagebox
+import ttkbootstrap as tb
+from PIL import Image, ImageTk
 
 # endregion
 
 # region(project_imports)
 
-from core.config import Config
 from core.archive import Archive
+from core.config import Config
 from ui.dialog import FilterDialog
 from ui.loupe import Loupe
 
@@ -132,7 +131,7 @@ class ThumbnailGrid(tb.Frame):
         if self._doc: self.unset_doc()
 
         self._doc = archive
-        self._items = self._doc.as_list2()
+        self._items = self._doc.as_list(sorted_list=True)
         self._total_items = len(self._items)
 
         for i, item in enumerate(self._items):
@@ -163,6 +162,7 @@ class ThumbnailGrid(tb.Frame):
             self._menubar.delete('Preview')
             self._menubar.delete('View')
             self._parent.docstat.set("PRE 0 DOC 0")
+            self._image_cache.clear()
         except:
             pass
 
@@ -188,13 +188,23 @@ class ThumbnailGrid(tb.Frame):
     def _reset(self):
         # Data
         self._doc = None
-        self._items = []
         self._total_items = 0
-        self._identity_map = {}
+
+        if hasattr(self, '_items'): self._items.clear()
+        else: self._items = []
+
+        if hasattr(self, '_identity_map'): self._identity_map.clear()
+        else: self._identity_map = {}
+
+        if hasattr(self, '_histogram_cache'): self._histogram_cache.clear()
+        else: self._histogram_cache = {}
 
         # View state management
-        self._image_cache = {}
-        self._visible_indices = set()
+        if hasattr(self, '_image_cache'): self._image_cache.clear()
+        else: self._image_cache = {}
+
+        if hasattr(self, '_visible_indices'): self._visible_indices.clear()
+        else: self._visible_indices = set()
 
         # zooming
         self._columns = 1
@@ -202,7 +212,6 @@ class ThumbnailGrid(tb.Frame):
         self._min_size = 60
         self._max_size = 400
         self._zoom_step = 20
-
         self._zoom_redraw_pending = False
         self._zoom_redraw_requested = False
         self._zoom_latest_direction = None
@@ -217,14 +226,19 @@ class ThumbnailGrid(tb.Frame):
         self._start_y = 0
 
         # Filter state
-        self._filters = []
-        self._filtered_indices = set()
         self._has_filters = False
 
+        if hasattr(self, '_filters'): self._filters.clear()
+        else: self._filters = []
+
+        if hasattr(self, '_filtered_indices'): self._filtered_indices.clear()
+        else: self._filtered_indices = set()
+
         # Selection
-        self._selected_indices = set()
         self._anchor_index = None
         self._active_index = None
+        if hasattr(self, '_selected_indices'): self._selected_indices.clear()
+        else: self._selected_indices = set()
 
         # Marquee
         self._marquee_start = None
@@ -379,26 +393,62 @@ class ThumbnailGrid(tb.Frame):
                 if self._items[index].rejected:
                     _draw_rejected(x, y)
 
+    def _ensure_visible(self, index: int):
+        if self._total_items == 0:
+            return False
+
+        if index not in self._visible_indices:
+            return
+
+        flat = self._visible_indices.index(index)
+        row = flat // self._columns
+
+        view_top = self._canvas.canvasy(0)
+        view_bottom = view_top + self._canvas.winfo_height()
+
+        row_top = row * self._cell
+        row_bottom = row_top + self._cell
+
+        # Fully visible → do nothing
+        if row_top >= view_top and row_bottom <= view_bottom:
+            return False
+
+        # Scroll up
+        if row_top < view_top:
+            new_view_y = row_top
+        else:
+            new_view_y = row_bottom - self._canvas.winfo_height()
+
+        max_y = max(0, self._total_height - self._canvas.winfo_height())
+        new_view_y = max(0, min(new_view_y, max_y))
+
+        self._canvas.yview_moveto(new_view_y / max(1, self._total_height))
+
+        return True
+
     def _load_image(self, index: int):
         key = (index, self._thumb_size)
-
         if key in self._image_cache:
             return self._image_cache[key]
 
-        path = self._nopreview if self._items[index].nopreview else self._items[index].low
-
-        try:
-            img = Image.open(path)
-
-        except Exception as e:
-            logwriter.error(f"Exception in Thumbnailgrid._load_image() {str(e)}")
-            img = Image.open(self._nopreview)
-
+        img = self._items[index].low.open() if self._items[index].low is not None else Image.open(self._nopreview)
         img.thumbnail((self._thumb_size, self._thumb_size))
-        tk_img = ImageTk.PhotoImage(img)
-        self._image_cache[key] = tk_img
+        self._image_cache[key] = ImageTk.PhotoImage(img)
+        img.close()
 
-        return tk_img
+        return self._image_cache[key]
+
+    def _select_range(self, start: int, end: int):
+        if start > end:
+            start, end = end, start
+
+        sel_set = set()
+        for i in range(start, end + 1):
+            if i in self._visible_indices:
+                sel_set.add(i)
+        self._selected_indices = sel_set
+
+        # self._selected_indices = set(range(start, end + 1))
 
     def _update_marquee_selection(self, left: int, top: int, right: int, bottom: int, ctrl):
         new_selection = set()
@@ -441,275 +491,38 @@ class ThumbnailGrid(tb.Frame):
             self._selected_indices = new_selection
         self._render_visible()
 
-    def _select_range(self, start: int, end: int):
-        if start > end:
-            start, end = end, start
+    def _on_handle_click(self, event: Any):
+        canvas_x = self._canvas.canvasx(event.x)
+        canvas_y = self._canvas.canvasy(event.y)
 
-        sel_set = set()
-        for i in range(start, end + 1):
-            if i in self._visible_indices:
-                sel_set.add(i)
-        self._selected_indices = sel_set
-
-        # self._selected_indices = set(range(start, end + 1))
-
-    def _ensure_visible(self, index: int):
-        if self._total_items == 0:
-            return False
-
-        if index not in self._visible_indices:
-            return
-
-        flat = self._visible_indices.index(index)
-        row = flat // self._columns
-
-        view_top = self._canvas.canvasy(0)
-        view_bottom = view_top + self._canvas.winfo_height()
-
-        row_top = row * self._cell
-        row_bottom = row_top + self._cell
-
-        # Fully visible → do nothing
-        if row_top >= view_top and row_bottom <= view_bottom:
-            return False
-
-        # Scroll up
-        if row_top < view_top:
-            new_view_y = row_top
-        else:
-            new_view_y = row_bottom - self._canvas.winfo_height()
-
-        max_y = max(0, self._total_height - self._canvas.winfo_height())
-        new_view_y = max(0, min(new_view_y, max_y))
-
-        self._canvas.yview_moveto(new_view_y / max(1, self._total_height))
-
-        return True
-
-    def _zoom_by(self, alltheway=False):
-        self._zoom_redraw_pending = False
-
-        if self._zoom_latest_pos is None:
-            return
-
-        anchor_x, anchor_y = self._zoom_latest_pos
-        direction = self._zoom_latest_direction
-
-        self._zoom_latest_pos = None
-        self._zoom_latest_direction = None
-
-        if direction not in (-1, 1):
-            return
-
-        # ---------------------------------------------------------
-        # Resolve the zoom anchor.
-        #
-        # Mouse-wheel zoom:
-        #     use the actual mouse position.
-        #
-        # Keyboard zoom / all-the-way zoom:
-        #     use the active thumbnail, or the nearest visible
-        #     thumbnail to the viewport centre.
-        # ---------------------------------------------------------
-        anchored_index = None
-
-        if anchor_x is None or anchor_y is None:
-            anchor = self._get_zoom_anchor()
-
-            if anchor is None:
-                return
-
-            anchored_index, anchor_x, anchor_y = anchor
-
-        # ---------------------------------------------------------
-        # If the anchor came from the mouse, determine which
-        # currently visible thumbnail occupies that position.
-        #
-        # IMPORTANT:
-        # The displayed grid is indexed through _visible_indices,
-        # not directly through the archive's raw item indices.
-        # ---------------------------------------------------------
-        cell = self._cell
-
-        col = int((anchor_x - self._gap) // cell)
-        row = int(anchor_y // cell)
+        col = int((canvas_x - self._gap) // self._cell)
+        row = int(canvas_y // self._cell)
 
         flat_index = row * self._columns + col
+        if flat_index >= len(self._visible_indices):
+            return
+        index = self._visible_indices[flat_index]
 
-        if anchored_index is None:
-            if flat_index < 0 or flat_index >= len(self._visible_indices):
-                # Mouse position is not over a valid thumbnail.
-                # Fall back to the nearest visible thumbnail.
-                anchor = self._get_zoom_anchor()
+        if index < 0 or index >= self._total_items:
+            return
 
-                if anchor is None:
-                    return
+        ctrl = (event.state & 0x0004) != 0
+        shift = (event.state & 0x0001) != 0
 
-                anchored_index, anchor_x, anchor_y = anchor
-
-                cell = self._cell
-
-                # Recalculate the visible position of the fallback
-                # thumbnail.
-                flat_index = self._visible_indices.index(anchored_index)
-
-                row = flat_index // self._columns
-                col = flat_index % self._columns
-
-                anchor_x = (
-                    self._gap
-                    + col * cell
-                    + self._thumb_size / 2
-                )
-
-                anchor_y = (
-                    row * cell
-                    + self._thumb_size / 2
-                )
+        if shift and self._anchor_index is not None:
+            self._select_range(self._anchor_index, index)
+        elif ctrl:
+            if index in self._selected_indices:
+                self._selected_indices.remove(index)
             else:
-                anchored_index = self._visible_indices[flat_index]
-
+                self._selected_indices.add(index)
+            self._anchor_index = index
         else:
-            # Active/fallback anchor already identifies the actual
-            # archive item. Resolve its current visible position.
-            flat_index = self._visible_indices.index(anchored_index)
+            self._selected_indices = {index}
+            self._anchor_index = index
 
-            row = flat_index // self._columns
-            col = flat_index % self._columns
-
-        # ---------------------------------------------------------
-        # Preserve the anchor's position inside its grid cell.
-        # ---------------------------------------------------------
-        offset_x = anchor_x - (self._gap + col * cell)
-        offset_y = anchor_y - (row * cell)
-
-        old_x = self._gap + col * cell + offset_x
-        old_y = row * cell + offset_y
-
-        # ---------------------------------------------------------
-        # Calculate new thumbnail size.
-        # ---------------------------------------------------------
-        if alltheway and direction < 0:
-            new_size = self._min_size
-
-        elif alltheway and direction > 0:
-            new_size = self._max_size
-
-        else:
-            new_size = (
-                self._thumb_size
-                + (
-                    self._zoom_step
-                    if direction > 0
-                    else -self._zoom_step
-                )
-            )
-
-            new_size = max(
-                self._min_size,
-                min(self._max_size, new_size)
-            )
-
-        if new_size == self._thumb_size:
-            return
-
-        self._thumb_size = new_size
-
-        # ---------------------------------------------------------
-        # Recalculate the grid.
-        #
-        # Zooming can change the number of columns, so the same
-        # archive item may now have a completely different
-        # visible row/column.
-        # ---------------------------------------------------------
-        self._recalculate_layout()
-        self._canvas.update_idletasks()
-
-        # ---------------------------------------------------------
-        # Find the SAME archive item again in the new visible grid.
-        # ---------------------------------------------------------
-        if anchored_index not in self._visible_indices:
-            # The item disappeared during layout/filter changes.
-            # Fall back to the nearest valid visible thumbnail.
-            anchor = self._get_zoom_anchor()
-
-            if anchor is None:
-                self._render_visible()
-                return
-
-            anchored_index, new_anchor_x, new_anchor_y = anchor
-
-            new_flat_index = self._visible_indices.index(
-                anchored_index
-            )
-
-            new_row = new_flat_index // self._columns
-            new_col = new_flat_index % self._columns
-
-            # Preserve the relative location within the cell.
-            offset_x = new_anchor_x - (
-                self._gap
-                + new_col * self._cell
-            )
-
-            offset_y = new_anchor_y - (
-                new_row * self._cell
-            )
-
-        else:
-            new_flat_index = self._visible_indices.index(
-                anchored_index
-            )
-
-            new_row = new_flat_index // self._columns
-            new_col = new_flat_index % self._columns
-
-        new_cell = self._cell
-
-        new_x = (
-            self._gap
-            + new_col * new_cell
-            + offset_x
-        )
-
-        new_y = (
-            new_row * new_cell
-            + offset_y
-        )
-
-        # ---------------------------------------------------------
-        # Move the viewport so the anchor remains at the same
-        # screen position.
-        # ---------------------------------------------------------
-        dx = new_x - old_x
-        dy = new_y - old_y
-
-        view_y = self._canvas.canvasy(0)
-        new_view_y = view_y + dy
-
-        viewport_h = self._canvas.winfo_height()
-        max_y = max(
-            0,
-            self._total_height - viewport_h
-        )
-
-        new_view_y = max(
-            0,
-            min(new_view_y, max_y)
-        )
-
-        self._canvas.yview_moveto(
-            new_view_y / max(1, self._total_height)
-        )
-
+        self._active_index = index
         self._render_visible()
-
-        if alltheway:
-            return
-
-        if self._zoom_latest_pos is not None:
-            self._zoom_redraw_pending = True
-            self.after(16, self._zoom_by, False)
 
     def _navigate(self, ctrl, shift, event):
         # -------------------------
@@ -809,65 +622,246 @@ class ThumbnailGrid(tb.Frame):
             # still need to update selection highlight
             self._render_visible()
 
-    def _get_visible_indices(self):
-        return [
-            i for i in range(self._total_items) 
-            if i not in self._filtered_indices and
-            not (self._hide_rejected and self._items[i].rejected)
-        ]
+    def _on_handle_zoom(self, event: Any):
+        canvas_x = self._canvas.canvasx(event.x)
+        canvas_y = self._canvas.canvasy(event.y)
 
-    def _get_rejected_indices(self):
-        return [self._identity_map[stack.identity] for stack in self._items if stack.rejected]
-
-    def _get_selected_stacks(self):
-        return [self._items[i] for i in list(self._selected_indices)]
-
-    def _get_active_stack(self):
-        return self._items[self._active_index]
-
-    def _apply_filters(self):
-        self._filtered_indices.clear()
-
-        for i in range(self._total_items):
-
-            # filter out items which do not meet our rating filter criteria
-            if self._rating_filter != 9:
-                if str(self._items[i].metadata.rating) != str(self._rating_filter):
-                    self._filtered_indices.add(i)
-                    continue
-
-            # if it has met our rating criteria, let us examine
-            # if it has met our metadata filter criteria
-            for f in self._filters:
-                if len(f.selected_values) > 0 and str(f.selected_values[0]).lower() != str(getattr(self._items[i].metadata, f.property)).lower():
-                    self._filtered_indices.add(i)
-                    break
-
-    def _remove_filters(self):
-        for f in self._filters:
-            f.selected_values.clear()
-        self._apply_filters()
-
-    def _copy_filters(self, filters):
-        has_filter = False
-        for ef in filters:
-            for i, df in enumerate(self._filters):
-                if df.property == ef.property:
-                    for ev in ef.selected_values:
-                        if any(str(item) == str(ev) for item in df.values):
-                            self._filters[i].selected_values.append(ev)
-                            has_filter = True
-        return has_filter
-
-    def _ctrl_plus_minus(self, direction):
-        self._zoom_latest_pos = (None, None)
+        direction = 1 if (event.num == 4 or event.delta > 0) else -1
         self._zoom_latest_direction = direction
+        self._zoom_latest_pos = (canvas_x, canvas_y)
 
         if self._zoom_redraw_pending:
-            return
+            return "break"
 
         self._zoom_redraw_pending = True
         self.after(16, self._zoom_by, False)
+
+        return "break"
+
+    def _zoom_by(self, alltheway=False):
+        self._zoom_redraw_pending = False
+
+        if self._zoom_latest_pos is None:
+            return
+
+        anchor_x, anchor_y = self._zoom_latest_pos
+        direction = self._zoom_latest_direction
+
+        self._zoom_latest_pos = None
+        self._zoom_latest_direction = None
+
+        if direction not in (-1, 1):
+            return
+
+        # ---------------------------------------------------------
+        # Resolve the zoom anchor.
+        #
+        # Mouse-wheel zoom:
+        #     use the actual mouse position.
+        #
+        # Keyboard zoom / all-the-way zoom:
+        #     use the active thumbnail, or the nearest visible
+        #     thumbnail to the viewport centre.
+        # ---------------------------------------------------------
+        anchored_index = None
+
+        if anchor_x is None or anchor_y is None:
+            anchor = self._get_zoom_anchor()
+
+            if anchor is None:
+                return
+
+            anchored_index, anchor_x, anchor_y = anchor
+
+        # ---------------------------------------------------------
+        # If the anchor came from the mouse, determine which
+        # currently visible thumbnail occupies that position.
+        #
+        # IMPORTANT:
+        # The displayed grid is indexed through _visible_indices,
+        # not directly through the archive's raw item indices.
+        # ---------------------------------------------------------
+        cell = self._cell
+
+        col = int((anchor_x - self._gap) // cell)
+        row = int(anchor_y // cell)
+
+        flat_index = row * self._columns + col
+
+        if anchored_index is None:
+            if flat_index < 0 or flat_index >= len(self._visible_indices):
+                # Mouse position is not over a valid thumbnail.
+                # Fall back to the nearest visible thumbnail.
+                anchor = self._get_zoom_anchor()
+
+                if anchor is None:
+                    return
+
+                anchored_index, anchor_x, anchor_y = anchor
+
+                cell = self._cell
+
+                # Recalculate the visible position of the fallback
+                # thumbnail.
+                flat_index = self._visible_indices.index(anchored_index)
+
+                row = flat_index // self._columns
+                col = flat_index % self._columns
+
+                anchor_x = (
+                    self._gap
+                    + col * cell
+                    + self._thumb_size / 2
+                )
+
+                anchor_y = (
+                    row * cell
+                    + self._thumb_size / 2
+                )
+            else:
+                anchored_index = self._visible_indices[flat_index]
+
+        else:
+            # Active/fallback anchor already identifies the actual
+            # archive item. Resolve its current visible position.
+            flat_index = self._visible_indices.index(anchored_index)
+
+            row = flat_index // self._columns
+            col = flat_index % self._columns
+
+        # ---------------------------------------------------------
+        # Preserve the anchor's position inside its grid cell.
+        # ---------------------------------------------------------
+        offset_x = anchor_x - (self._gap + col * cell)
+        offset_y = anchor_y - (row * cell)
+
+        # old_x = self._gap + col * cell + offset_x
+        old_y = row * cell + offset_y
+
+        # ---------------------------------------------------------
+        # Calculate new thumbnail size.
+        # ---------------------------------------------------------
+        if alltheway and direction < 0:
+            new_size = self._min_size
+
+        elif alltheway and direction > 0:
+            new_size = self._max_size
+
+        else:
+            new_size = (
+                self._thumb_size
+                + (
+                    self._zoom_step
+                    if direction > 0
+                    else -self._zoom_step
+                )
+            )
+
+            new_size = max(
+                self._min_size,
+                min(self._max_size, new_size)
+            )
+
+        if new_size == self._thumb_size:
+            return
+
+        self._thumb_size = new_size
+
+        # ---------------------------------------------------------
+        # Recalculate the grid.
+        #
+        # Zooming can change the number of columns, so the same
+        # archive item may now have a completely different
+        # visible row/column.
+        # ---------------------------------------------------------
+        self._recalculate_layout()
+        self._canvas.update_idletasks()
+
+        # ---------------------------------------------------------
+        # Find the SAME archive item again in the new visible grid.
+        # ---------------------------------------------------------
+        if anchored_index not in self._visible_indices:
+            # The item disappeared during layout/filter changes.
+            # Fall back to the nearest valid visible thumbnail.
+            anchor = self._get_zoom_anchor()
+
+            if anchor is None:
+                self._render_visible()
+                return
+
+            anchored_index, new_anchor_x, new_anchor_y = anchor
+
+            new_flat_index = self._visible_indices.index(
+                anchored_index
+            )
+
+            new_row = new_flat_index // self._columns
+            new_col = new_flat_index % self._columns
+
+            # Preserve the relative location within the cell.
+            offset_x = new_anchor_x - (
+                self._gap
+                + new_col * self._cell
+            )
+
+            offset_y = new_anchor_y - (
+                new_row * self._cell
+            )
+
+        else:
+            new_flat_index = self._visible_indices.index(
+                anchored_index
+            )
+
+            new_row = new_flat_index // self._columns
+            new_col = new_flat_index % self._columns
+
+        new_cell = self._cell
+
+        # new_x = (
+        #     self._gap
+        #     + new_col * new_cell
+        #     + offset_x
+        # )
+
+        new_y = (
+            new_row * new_cell
+            + offset_y
+        )
+
+        # ---------------------------------------------------------
+        # Move the viewport so the anchor remains at the same
+        # screen position.
+        # ---------------------------------------------------------
+        # dx = new_x - old_x
+        dy = new_y - old_y
+
+        view_y = self._canvas.canvasy(0)
+        new_view_y = view_y + dy
+
+        viewport_h = self._canvas.winfo_height()
+        max_y = max(
+            0,
+            self._total_height - viewport_h
+        )
+
+        new_view_y = max(
+            0,
+            min(new_view_y, max_y)
+        )
+
+        self._canvas.yview_moveto(
+            new_view_y / max(1, self._total_height)
+        )
+
+        self._render_visible()
+
+        if alltheway:
+            return
+
+        if self._zoom_latest_pos is not None:
+            self._zoom_redraw_pending = True
+            self.after(16, self._zoom_by, False)
 
     def _get_zoom_anchor(self):
         """
@@ -929,25 +923,71 @@ class ThumbnailGrid(tb.Frame):
 
         return best_index, best_x, best_y
 
-# endregion
-
-# region(event_handlers)
-
-    def _on_handle_zoom(self, event: Any):
-        canvas_x = self._canvas.canvasx(event.x)
-        canvas_y = self._canvas.canvasy(event.y)
-
-        direction = 1 if (event.num == 4 or event.delta > 0) else -1
+    def _ctrl_plus_minus(self, direction):
+        self._zoom_latest_pos = (None, None)
         self._zoom_latest_direction = direction
-        self._zoom_latest_pos = (canvas_x, canvas_y)
 
         if self._zoom_redraw_pending:
-            return "break"
+            return
 
         self._zoom_redraw_pending = True
         self.after(16, self._zoom_by, False)
 
-        return "break"
+    def _get_visible_indices(self):
+        return [
+            i for i in range(self._total_items) 
+            if i not in self._filtered_indices and
+            not (self._hide_rejected and self._items[i].rejected)
+        ]
+
+    def _get_rejected_indices(self):
+        return [self._identity_map[stack.identity] for stack in self._items if stack.rejected]
+
+    def _get_selected_stacks(self):
+        return [self._items[i] for i in list(self._selected_indices)]
+
+    def _get_active_stack(self):
+        return self._items[self._active_index]
+
+    def _evaluate_rating_filter(self, item):
+        return (self._rating_filter == 9) or (item.metadata.rating == self._rating_filter)
+
+    def _evaluate_metadata_filter(self, item):
+        for f in self._filters:
+            if (len(f.selected_values) > 0) and (getattr(item.metadata, f.property) not in f.selected_values):
+                return False
+        return True
+
+    def _apply_filters(self):
+        self._filtered_indices.clear()
+        for i in range(self._total_items):
+            if not self._evaluate_rating_filter(self._items[i]):
+                self._filtered_indices.add(i)
+                continue
+            if not self._evaluate_metadata_filter(self._items[i]):
+                self._filtered_indices.add(i)
+
+    def _remove_filters(self):
+        self._filtered_indices.clear()
+        for i in range(self._total_items):
+            if not self._evaluate_rating_filter(self._items[i]):
+                self._filtered_indices.add(i)
+
+    def _copy_filters(self, filters):
+        has_filter = False
+        for given_filter in filters:
+            for i, effective_filter in enumerate(self._filters):
+                if effective_filter.property == given_filter.property:
+                    effective_values_set = set(effective_filter.values)
+                    matching_values = [item for item in given_filter.selected_values if item in effective_values_set]
+                    if len(matching_values) > 0:
+                        self._filters[i].selected_values.append(matching_values)
+                        has_filter = True
+        return has_filter
+
+# endregion
+
+# region(event_handlers)
 
     def _on_mouse_down(self, event: Any):
         self._canvas.focus_set()
@@ -1001,49 +1041,9 @@ class ThumbnailGrid(tb.Frame):
             self._canvas.delete(self._marquee_rect)
             self._marquee_rect = None
 
-    def _on_handle_click(self, event: Any):
-        canvas_x = self._canvas.canvasx(event.x)
-        canvas_y = self._canvas.canvasy(event.y)
-
-        col = int((canvas_x - self._gap) // self._cell)
-        row = int(canvas_y // self._cell)
-
-        flat_index = row * self._columns + col
-        if flat_index >= len(self._visible_indices):
-            return
-        index = self._visible_indices[flat_index]
-
-        if index < 0 or index >= self._total_items:
-            return
-
-        ctrl = (event.state & 0x0004) != 0
-        shift = (event.state & 0x0001) != 0
-
-        if shift and self._anchor_index is not None:
-            self._select_range(self._anchor_index, index)
-        elif ctrl:
-            if index in self._selected_indices:
-                self._selected_indices.remove(index)
-            else:
-                self._selected_indices.add(index)
-            self._anchor_index = index
-        else:
-            self._selected_indices = {index}
-            self._anchor_index = index
-
-        self._active_index = index
-        self._render_visible()
-
     def _on_key(self, event: Any):
         if self._total_items == 0:
             return
-
-        # print(
-        #     f"keysym={event.keysym!r}, "
-        #     f"keycode={event.keycode!r}, "
-        #     f"char={event.char!r}, "
-        #     f"state={event.state:#x}"
-        # )
 
         ctrl = (event.state & 0x0004) != 0
         shift = (event.state & 0x0001) != 0
@@ -1184,7 +1184,6 @@ class ThumbnailGrid(tb.Frame):
         if event.keysym.lower() == "b":
             self._onkey_b()
             return "break"
-        
 
     def _on_resize(self, event: Any):
         self._redraw()
@@ -1308,7 +1307,7 @@ class ThumbnailGrid(tb.Frame):
             label="Compare" if (active and (selcount > 1) and (selcount <= 4)) else "Image")
 
     def _on_preview_menu_unfold(self):
-        active = self._doc is not None and len(self._items) > 0
+        active = self._doc is not None and self._doc.ready and len(self._items) > 0
         state = "normal" if active else "disabled"
         self._preview_menu.entryconfig(PreviewMenu.rebuildAll.value, state=state)
 
@@ -1324,20 +1323,18 @@ class ThumbnailGrid(tb.Frame):
         self._parent._root.attributes("-fullscreen", self._fullscreen)
 
     def _onkey_ctrl_f(self):
-        # remove the previously applied filters
+        # if we have filters remove the previously applied filters
+        # else ask user for filter parameters
+        # if custom_filter is not None, it will simply apply the supplied filters
         if self._has_filters:
             self._remove_filters()
-            self._has_filters = False
-            self._redraw()
-            return
+        else:
+            if FilterDialog(self._parent._root, self._filters).show():
+                self._apply_filters()
 
-        # ask user for filter parameters
-        # if custom_filter is not None, it will simply apply the supplied filters
-        if FilterDialog(self._parent._root, self._filters).show():
-            self._apply_filters()
-            self._has_filters = True
-            self._redraw()
-            return
+        self._has_filters = not self._has_filters
+        self._redraw()
+        self._canvas.focus_set()
 
     def _onkey_ctrl_a(self):
         self._selected_indices = self._visible_indices.copy()
@@ -1391,14 +1388,9 @@ class ThumbnailGrid(tb.Frame):
         for stack in stacks:
             stack.metadata.rating = nval
 
-        try:
-            self._doc.save()
-            self._redraw()
-            self._loupe._redraw()
-
-        except Exception as e:
-            logwriter.error(f"Error in Thumbnailgrid._onkey_apply_rating() {str(e)}")
-            messagebox.showerror(f"Error in Thumbnailgrid._onkey_apply_rating() {str(e)}", parent=self)
+        self._doc.save()
+        self._redraw()
+        self._loupe._redraw()
 
     def _onkey_delete(self):
         if not self._doc or not self._doc.ready:
@@ -1408,14 +1400,9 @@ class ThumbnailGrid(tb.Frame):
         for stack in selected:
             stack.rejected = not stack.rejected
 
-        try:
-            self._doc.save()
-            self._redraw()
-            self._loupe._redraw()
-
-        except Exception as e:
-            logwriter.error(f"Error in Thumbnailgrid._onkey_apply_rating() {str(e)}")
-            messagebox.showerror(f"Error in Thumbnailgrid._onkey_apply_rating() {str(e)}", parent=self)  
+        self._doc.save()
+        self._redraw()
+        self._loupe._redraw()
 
     # mainwindow delegations
 
@@ -1444,3 +1431,4 @@ class ThumbnailGrid(tb.Frame):
             self._parent.on_preview_rebuild_previews(self._doc.as_list())
 
 # endregion
+

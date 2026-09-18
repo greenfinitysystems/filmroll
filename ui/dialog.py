@@ -2,18 +2,18 @@
 
 import logging
 import tkinter as tk
-from ui.messagebox import messagebox
-from tkinter import filedialog, scrolledtext
 from pathlib import Path
-from PIL import Image, ImageTk
+from tkinter import filedialog, scrolledtext
 import ttkbootstrap as tb
+from PIL import Image, ImageTk
 
 # endregion
 
 # region(project_imports)
 
-from core.util import Util, JpegExportTemplate
 from core.config import Config
+from core.util import JpegExportTemplate, Util
+from ui.messagebox import MessageBox
 
 # endregion
 
@@ -68,7 +68,7 @@ class Dialog(tb.Toplevel):
             return
 
         ctrl = (event.state & 0x0004) != 0
-        shift = (event.state & 0x0001) != 0
+        #shift = (event.state & 0x0001) != 0
 
         if ctrl and event.keysym in ["Return", "KP_Enter"]:
             self.on_ok()
@@ -190,7 +190,7 @@ class RepairArchiveDialog(Dialog):
         if (self._apath.get() == "" or 
             not Path(self._apath.get()).exists() or 
             not Path(self._apath.get()).is_dir()):
-            messagebox.showerror("Error", "Please provide a valid folder.", parent=self)
+            MessageBox.showerror("Error", "Please provide a valid folder.", parent=self)
             return False
 
         return True
@@ -237,7 +237,7 @@ class FilterDialog(Dialog):
             f.selected_values.clear()
             text = self._variables[i].get()
             if not text.startswith("Any"):
-                f.selected_values.insert(0, text)
+                f.selected_values.append(text)
 
         return True
 
@@ -423,7 +423,7 @@ class JpegExportDialog(Dialog):
 
         for p in self._excluded_paths:
             if Path(dir).resolve() == p.resolve() or p.resolve() in parents:
-                messagebox.showerror("Error", "Cannot copy to protected folders.", parent=self)
+                MessageBox.showerror("Error", "Cannot copy to protected folders.", parent=self)
                 return
 
         self._tk_jpeg_path.set(str(dir))
@@ -437,7 +437,7 @@ class JpegExportDialog(Dialog):
     def validate(self) -> bool:
         jpeg_path = self._tk_jpeg_path.get().strip()
         if jpeg_path == "":
-            messagebox.showerror("Error", "Location cannot be empty", parent=self)
+            MessageBox.showerror("Error", "Location cannot be empty", parent=self)
             return False
 
         jpeg_size = int(self._tk_jpeg_size.get())
@@ -457,7 +457,7 @@ class JpegExportDialog(Dialog):
 
         border_color = self._tk_border_color.get().strip()
         if not Util.is_valid_hex_code(border_color):
-            messagebox.showerror("Error", "Border is enabled. Border color must be a valid color code", parent=self)
+            MessageBox.showerror("Error", "Border is enabled. Border color must be a valid color code", parent=self)
             return False
 
         border_size = self._tk_border_size.get() / 100.0 if self._tk_border_size.get() != "Original" else 0.0

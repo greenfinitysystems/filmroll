@@ -7,8 +7,8 @@ from typing import Any
 
 # region(project_imports)
 
-from core.metadata import Metadata
 from core.config import Config
+from core.metadata import Metadata
 
 # endregion
 
@@ -230,53 +230,24 @@ class FujifilmMetadata(Metadata):
 
 # region(methods)
 
-    def get_text(self):
-        lines = [
-                # f"Camera: {self.camera}",
-                # f"Lens: {self.lensmodel}",
-                # f"Aperture: f/{self.aperture}",
-                # f"Shutter: {self.shutter_speed}s",
-                # f"ISO: {self.iso}",
-                # f"EV: {self.exposure_compensation}",
-                f"Film: {self.film}",
-                f"White Balance: {self.white_balance_display}",
-                f"Dynamic Range: {self.dynamic_range}",
-                f"Tone: H:{self.highlight} S:{self.shadow}",
-                f"Color: {self.color}",
-                f"Chrome: {self.color_chrome_effect}",
-                f"Chrome (Blue): {self.color_chrome_fx_blue}",
-                f"Sharpness: {self.sharpness}",
-                f"Clarity: {self.clarity}",
-                f"Grain: {self.grain_size} {self.grain_roughness}",
-                f"Noise Reduction: {self.noise_reduction}",
-                
-            ]
+    def get_text(self, full: bool =False):
+        exif_data = super().get_text().split('\n') if full else []
+        meta_data = [
+            f"Film: {self.film}",
+            f"White Balance: {self.white_balance_display}",
+            f"Dynamic Range: {self.dynamic_range}",
+            f"Tone: H:{self.highlight} S:{self.shadow}",
+            f"Color: {self.color}",
+            f"Chrome: {self.color_chrome_effect}",
+            f"Chrome (Blue): {self.color_chrome_fx_blue}",
+            f"Sharpness: {self.sharpness}",
+            f"Clarity: {self.clarity}",
+            f"Grain: {self.grain_size} {self.grain_roughness}",
+            f"Noise Reduction: {self.noise_reduction}",
+            
+        ]
 
-        return "\n".join(lines)
-
-    def get_text_full(self):
-        lines = [
-                f"Camera: {self.camera}",
-                f"Lens: {self.lensmodel}",
-                f"Aperture: f/{self.aperture}",
-                f"Shutter: {self.shutter_speed}s",
-                f"ISO: {self.iso}",
-                f"EV: {self.exposure_compensation}",
-                f"Film: {self.film}",
-                f"White Balance: {self.white_balance_display}",
-                f"Dynamic Range: {self.dynamic_range}",
-                f"Tone: H:{self.highlight} S:{self.shadow}",
-                f"Color: {self.color}",
-                f"Chrome: {self.color_chrome_effect}",
-                f"Chrome (Blue): {self.color_chrome_fx_blue}",
-                f"Sharpness: {self.sharpness}",
-                f"Clarity: {self.clarity}",
-                f"Grain: {self.grain_size} {self.grain_roughness}",
-                f"Noise Reduction: {self.noise_reduction}",
-                
-            ]
-
-        return "\n".join(lines)
+        return '\n'.join(exif_data + meta_data)
 
 # endregion
 

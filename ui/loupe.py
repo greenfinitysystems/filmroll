@@ -1,16 +1,16 @@
 # region(python_imports)
 
 import logging
-import ttkbootstrap as tb
 import pyperclip
+import ttkbootstrap as tb
 
 # endregion
 
 # region(project_imports)
 
 from core.config import Config
-from ui.dialog import UserCommentDialog
 from ui.canvas import Canvas, DisplayMode
+from ui.dialog import UserCommentDialog
 
 # endregion
 
@@ -100,7 +100,7 @@ class Loupe:
     def _on_key(self, event):
         if self._root is None: return
         ctrl = (event.state & 0x0004) != 0
-        shift = (event.state & 0x0001) != 0
+        #shift = (event.state & 0x0001) != 0
 
         # -------------------------
         # Copy metadata to clipboard
@@ -188,6 +188,7 @@ class Loupe:
 
             self._stacks[0] = new_stack
             self._active_local = 0
+            self._show_histogram = False
             self._canvases[0].reload()
     
         def _navigate_local():

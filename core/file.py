@@ -2,19 +2,20 @@
 
 import logging
 import shutil
-import exiv2
-from pathlib import Path
 from enum import Enum
-from PIL import Image
+from pathlib import Path
 from typing import Any
+import exiv2
+import rawpy
+from PIL import Image, ImageOps
 
 # endregion
 
 # region(project_imports)
 
-from core.metadata import Metadata
-from core.fujifilm import FujifilmMetadata
 from core.config import Config
+from core.fujifilm import FujifilmMetadata
+from core.metadata import Metadata
 
 # endregion
 
@@ -58,7 +59,7 @@ class File:
         self._file_size = -1
 
         if not pathobj.exists() or not pathobj.is_file():
-            logwriter.warning(f"File not found or not a file. Throwing FileNotFoundError")
+            logwriter.warning(f"File.__init__() - File not found or not a file. {path}")
             raise FileNotFoundError("File not found or not a file")
 
         cfg = Config()
@@ -67,8 +68,8 @@ class File:
         elif pathobj.suffix.lower() in cfg.jpg_ext: self._filetype = FileType.JPG
         elif pathobj.suffix.lower() in cfg.tif_ext: self._filetype = FileType.TIF
         else:
-            logwriter.warning(f"Unsupported file extension {pathobj.suffix}. Throwing TypeError") 
-            raise TypeError(f"Unsupported file type: {path}")
+            logwriter.warning(f"File.__init__() - Unsupported file extension {pathobj.suffix}.r") 
+            raise TypeError(f"File.__init__() - Unsupported file type: {path}")
 
         try:
             image = exiv2.ImageFactory.open(str(pathobj))
@@ -81,9 +82,9 @@ class File:
             self._identity = f"{camerabody_serial}-{datetime_original}{sequence_number}"
 
         except Exception as e:
-            logwriter.warning(f"Unable to construct identity => {pathobj.name}") 
+            logwriter.warning(f"File.__init__() - Unable to construct identity => {pathobj.name}") 
             logwriter.warning(str(e))
-            raise Exception(f"File identity failed => {pathobj.name}")
+            raise Exception(f"File.__init__() - File identity failed => {pathobj.name}")
 
         if self._filetype == FileType.JPG:
             with Image.open(str(pathobj)) as jpg_image:
@@ -176,7 +177,7 @@ class File:
             return True
 
         if not new_path.exists() or not new_path.is_file():
-            logwriter.warning(f"Path {str(value)} not found or not a file.")
+            logwriter.warning(f"File.migrate() - Path {str(value)} not found or is not a file.")
             return False
 
         self._path = str(new_path)
@@ -191,44 +192,70 @@ class File:
             return FujifilmMetadata(exif_data) if make.lower()== "fujifilm" else Metadata(exif_data)
 
         except Exception as e:
-            logwriter.warning(f"Exception occured while extracting metadata.")
-            logwriter.warning(str(e))
+            logwriter.warning(f"File.exifread() - Exception occured while extracting metadata.")
+            logwriter.debug(str(e))
             return None
 
+    def open(self) -> Any:
+        if not self.exists():
+            return Image.open(Config().asset("thumb.jpg"))
+
+        if self.type == FileType.LOW:
+            return Image.open(str(self))
+
+        if self.type == FileType.JPG:
+            return ImageOps.exif_transpose(Image.open(str(self)))
+
+        if self.type == FileType.RAW:
+            with rawpy.imread(str(self)) as raw:
+                rgb_array = raw.postprocess(
+                    use_camera_wb=True, 
+                    use_auto_wb=False, 
+                    no_auto_bright=False, 
+                    output_color=rawpy.ColorSpace.sRGB, 
+                    fbdd_noise_reduction=rawpy.FBDDNoiseReductionMode.Light, 
+                    half_size=True)
+
+            return ImageOps.exif_transpose(
+                Image.fromarray(rgb_array)
+            )
+
+        return None
+
     @staticmethod
-    def copy_to(src: str, target: str) -> bool:
+    def copy(src: str, target: str) -> bool:
         src_path = Path(src)
         if not src_path.exists() or not src_path.is_file(): 
-            logwriter.warning(f"Source not found => {str}.")
+            logwriter.warning(f"File.copy() - Source not found => {str}.")
             return False
 
         dst_path = Path(target)
         if dst_path.exists() and dst_path.is_file() and (
             src_path.stat().st_mtime < dst_path.stat().st_mtime):
-            logwriter.info(f"Destination is more recent. Refusing to overwrite.")
+            logwriter.info(f"File.copy() - Destination is more recent. Refusing to overwrite.")
             return True
 
         try: 
             shutil.copy2(src, target)
-            logwriter.info(f"Copy successful => {src} to {target}")
+            logwriter.info(f"File.copy() - Copy successful => {src} to {target}")
 
         except Exception as e:
-            logwriter.warning(f"Exception occured iin shutil.copy2().") 
-            logwriter.warning(str(e))
+            logwriter.warning(f"File.copy() - Exception occured in shutil.copy2().") 
+            logwriter.debug(str(e))
             return False
 
         return True
 
     @staticmethod
-    def move_to(src: str, target: str) -> bool:
+    def move(src: str, target: str) -> bool:
         src_path = Path(src)
         if not src_path.exists() or not src_path.is_file(): 
-            logwriter.warning(f"Source not found or not a file.")
+            logwriter.warning(f"File.move() - Source not found or not a file.")
             return False
 
         dst_path = Path(target)
-        if dst_path.is_dir() and not dst_path.exists():
-            logwriter.warning(f"Destination folder does not exist {target}")
+        if not dst_path.exists() or not dst_path.is_dir():
+            logwriter.warning(f"File.move() - Destination folder does not exist {target}")
             return False
 
         # if the target file already exists in the destinaton folder 
@@ -239,11 +266,11 @@ class File:
 
         try: 
             shutil.move(src, str(tgt_path))
-            logwriter.info(f"Move successful => {src} to {target}")
+            logwriter.info(f"File.move() - Move successful => {src} to {target}")
 
         except Exception as e:
-            logwriter.warning(f"Exception occured in shutil.move().") 
-            logwriter.warning(str(e))
+            logwriter.warning(f"File.move() - Exception occured in shutil.move().") 
+            logwriter.debug(str(e))
             return False
 
         return True
@@ -252,16 +279,16 @@ class File:
     def delete(src: str) -> bool:
         src_path = Path(src)
         if not src_path.exists() or not src_path.is_file(): 
-            logwriter.warning(f"Source nonexistant or not a file.")
+            logwriter.warning(f"File.delete() - Source nonexistant or not a file.")
             return False
 
         try:
             src_path.unlink()
-            logwriter.info(f"Delete successful => {src}")
+            logwriter.info(f"File.delete() - Delete successful => {src}")
 
         except Exception as e:
-            logwriter.warning(f"Exception occured in Path.unlink().") 
-            logwriter.warning(str(e))
+            logwriter.warning(f"File.delete() - Exception occured in Path.unlink().") 
+            logwriter.debug(str(e))
             return False
 
         return True

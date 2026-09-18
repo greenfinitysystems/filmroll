@@ -1,23 +1,23 @@
 # region(python_imports)
 
-import sys
 import json
 import logging
+import sys
+from functools import cache
 from pathlib import Path
 from typing import Any
-from functools import cache
 
 # endregion
 
 # region(project_imports)
 
-from core.util import Util, MetadataFilter
+from core.util import MetadataFilter, Util
 
 # endregion
 
 class Config:
 
-    __VERSION__ = "0.6.0"
+    __VERSION__ = "0.6.1"
 
 # region(class_methods)
 
@@ -277,10 +277,11 @@ Created by Bibhas Das.
     @property
     def metadata_filters(self) -> list:
         focal_filter = "focal_length" if self.use_focal_groups == 0 else "focal_group"
+        focal_label = "Focal Length" if self.use_focal_groups == 0 else "Focal Group"
         return [
             MetadataFilter(property = "camera",         label = "Camera",           values=[], selected_values=[]),
             MetadataFilter(property = "lensmodel",      label = "Lens",             values=[], selected_values=[]),
-            MetadataFilter(property = focal_filter,     label = "Focal Length",     values=[], selected_values=[]),
+            MetadataFilter(property = focal_filter,     label = focal_label,        values=[], selected_values=[]),
             MetadataFilter(property = "aperture",       label = "Aperture",         values=[], selected_values=[]),
             MetadataFilter(property = "iso",            label = "ISO",              values=[], selected_values=[]),
             MetadataFilter(property = "film",           label = "Film Simulation",  values=[], selected_values=[]),

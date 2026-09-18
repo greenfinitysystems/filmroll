@@ -4,6 +4,7 @@ import logging
 import math
 import re
 from typing import Any, NamedTuple
+from scipy.ndimage import gaussian_filter1d
 
 # endregion
 
@@ -42,6 +43,26 @@ class Util:
         hex_pattern = r'^#([a-fA-F0-9]{6}|[a-fA-F0-9]{3})$'
         return bool(re.match(hex_pattern, s))
 
+    @staticmethod
+    def histogram(image, size):
+        image.thumbnail((128, 128))
+        r, g, b = image.split()    
+        hist_r_s = gaussian_filter1d(r.histogram(), sigma=2)    
+        hist_g_s = gaussian_filter1d(g.histogram(), sigma=2)
+        hist_b_s = gaussian_filter1d(b.histogram(), sigma=2)    
+        # img.convert('L')
+        # hist_w_s = gaussian_filter1d(img.histogram(), sigma=2)    
+        # return (hist_r_s, hist_g_s, hist_b_s, hist_w_s)
+        hist_data = (hist_r_s, hist_g_s, hist_b_s)
+
+        for hist in hist_data:
+            max_v = max(hist)
+            vscale = size[1] / max_v if max_v != 0 else 0
+            for i, v in enumerate(hist):
+                hist[i] = v * vscale
+
+        return hist_data
+
 # endregion
 
 # region(worker_func_tuples)
@@ -57,9 +78,6 @@ class FileOpsJob(NamedTuple):
 
 class CollateJob(NamedTuple):
     source: str
-
-class MetadataJob(NamedTuple):
-    identity: str
 
 class JpegExportJob(NamedTuple):
     source: str

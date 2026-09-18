@@ -1,4 +1,17 @@
 All notable changes to Filmroll are documented here.
+## [0.6.1] - 2026-09-18
+
+### Fixed
+- Multiple minor UI related issues fixed
+
+### Changed
+- Issue #9 delivered
+- Issue #10 delivered
+- Performance improvement
+- Memory handling is improved 
+- multiprocessing is improved
+- Application lifecycle manageemnt improved
+
 ## [0.6.0] - 2026-09-10
 
 ### Fixed

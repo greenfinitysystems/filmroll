@@ -2,25 +2,30 @@
 
 import logging
 import pickle
-import jsonpickle
-from jsonpickle import tags
+import platform
+import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Self, Any
-import subprocess
-import platform
+from typing import Any, Self
+import jsonpickle
+from jsonpickle import tags
 
 # endregion
 
 # region(project_imports)
 
-from core.file import File, FileType, FileOps
-from core.stack import Stack
-from core.preview import PreviewBuilder
-from core.util import FileOpsJob, MetadataJob, PreviewJob, CollateJob, JpegExportJob, JpegExportTemplate
 from core.config import Config
-from core.proxy import AsyncProxy, AsyncCtrlParams
-from ui.messagebox import messagebox
+from core.file import File, FileOps, FileType
+from core.preview import PreviewBuilder
+from core.proxy import AsyncCtrlParams, AsyncProxy
+from core.stack import Stack
+from core.util import (
+    CollateJob,
+    FileOpsJob,
+    JpegExportJob,
+    JpegExportTemplate,
+    PreviewJob,
+)
 
 # endregion
 
@@ -30,6 +35,7 @@ logwriter = logging.getLogger(__name__)
 logwriter.setLevel(Config().logger_log_level)
 
 import traceback
+
 
 def _debug_assert_(condition, message):
     if condition: return True
@@ -78,6 +84,12 @@ class Archive():
         if '_lock_count' in state: del state['_lock_count']
         if '_dirty' in state: del state['_dirty']
 
+        if isinstance(state.get("_root"), Path):
+            state["_root"] = str(state["_root"])
+
+        if isinstance(state.get("_last_saved_loc"), Path):
+            state["_last_saved_loc"] = str(state["_last_saved_loc"])
+
         return state
 
     def __setstate__(self, state):
@@ -87,6 +99,12 @@ class Archive():
         if not hasattr(self, '_description'): self._description = ''
         if not hasattr(self, '_lock_count'): self._lock_count = 0
         if not hasattr(self, '_dirty'): self._dirty = False
+
+        if hasattr(self, '_root') and isinstance(self._root, str):
+            self._root = Path(self._root)
+
+        if hasattr(self, '_last_saved_loc') and isinstance(self._last_saved_loc, str):
+            self._last_saved_loc = Path(self._last_saved_loc)
 
 # endregion
 
@@ -211,17 +229,16 @@ class Archive():
 # region(methods)
 
     # returns the content of the archive as a list
-    def as_list(self) -> list:
-        return list(self._catalog.values()) if self._root is not None else []
-
-    # returns the content of the archive as a sorted list by identity
-    def as_list2(self) -> list:
+    def as_list(self, sorted_list: bool =False) -> list:
+        if not sorted_list:
+            return list(self._catalog.values()) if self._root is not None else []
         return sorted( (list(self._catalog.values()) if self._root is not None else [] ), key= lambda stack: stack.identity)
 
     # search for a file based on identity and type
     def find(self, identity: str, type: FileType) -> File | None:
         if not _debug_assert_(( self._root is not None),
             "Archive.find() - root is none"): return
+
         stack = self._catalog.get(identity, None)
         if stack is not None:
             return stack.find(type)
@@ -376,7 +393,7 @@ class Archive():
         # with open(backup_file, 'wb') as f:
         #     pickle.dump(ar, f)
 
-        frozen_json = jsonpickle.encode(self)
+        frozen_json = jsonpickle.encode(ar)
         with open(backup_file, "w") as f:
             f.write(frozen_json)
 
@@ -413,7 +430,7 @@ class Archive():
                 return False
 
         # secondly, the file should physically exists
-            if not f.exists() and not f.is_file():
+            if not f.exists() or not f.is_file():
                 return False
 
         # thirdly, the files actual name and legitimate name are the same
@@ -467,7 +484,7 @@ class Archive():
             # asking the thumbnail view, or whomsoever it may concern to 
             # reload the document
             win = AsyncProxy()
-            win.event_queue.put(("RELOAD_DOCUMENT", True))
+            win.post_event("RELOAD_DOCUMENT", True)
 
             logwriter.debug(f"Archive::import_folder._step_5() - document reloaded")
 
@@ -480,7 +497,6 @@ class Archive():
 
             # as usual - stop the custom event first; we don't need it any more
             win.exit_async_session(event)
-            win.reset_statusbar()
 
             # just for showing the message
             if not win.evaluate_async_outcome(event):
@@ -512,7 +528,6 @@ class Archive():
 
             win = AsyncProxy()
             win.exit_async_session(event)
-            win.reset_statusbar()
 
             # get back the temporary archive.
             nonlocal mp_archive
@@ -582,7 +597,6 @@ class Archive():
 
             win = AsyncProxy()
             win.exit_async_session( event)
-            win.reset_statusbar()
 
             # we will evaluate (and through messages) but will not do anything much
             # as we were working on a copy. we will unlock the original archive and return
@@ -635,14 +649,14 @@ class Archive():
             # no point moving any further
             if job_count <= 0: 
                 logwriter.debug(f"Archive::import_folder._step_2() - no new files to import")
-                messagebox.showinfo("Information", f"No new or updated files found to import.")
+                win.showwarning("Import Files", f"No new or updated files found to import.")
                 self.unlock()
                 return
 
             logwriter.debug(f"Archive::import_folder._step_1() - {job_count} files to import")
 
             # warn the user; file transfers can be lengthy depending on size and number of files
-            if not messagebox.askyesno("Confirmation", 
+            if not win.askyesno("Import Files", 
                 f"Total {job_count} files will be copied to this archive folder. Proceed?"):
                 logwriter.debug(f"Archive::import_folder._step_2() - user declined to proceed further")
                 self.unlock()
@@ -669,13 +683,12 @@ class Archive():
             logwriter.debug(f"Entering Archive.import._step_1()")
 
             win = AsyncProxy()
-            win.reset_statusbar()
 
             # if the length of the list is zero, it means we have no image file n the folder
             # inform user and return
             if len(files) <= 0: 
                 logwriter.debug(f"Archive::import_folder._step_1() - no files to import")
-                messagebox.showinfo("Empty Folder", f"No images found. Nothing to import.")
+                win.showwarning("Import Files", f"No images found. Nothing to import.")
                 return
 
             # lock the source archive so that it does not get modified
@@ -684,6 +697,7 @@ class Archive():
             # it is just a precautonary step
             if not self.lock():
                 logwriter.debug(f"Archive::import_folder._step_1() - failed to lock the archive")
+                win.showwarning("Import Files", f"Failed to lock the archive")
                 return
 
             # create a list of collate jobs
@@ -712,9 +726,6 @@ class Archive():
             logwriter.debug(f"Entering Archive.import._step_0()")
             win = AsyncProxy()
 
-            # clean the status bar
-            win.reset_statusbar()
-
             # Singleton configuration object
             cfg = Config()
 
@@ -722,7 +733,7 @@ class Archive():
             p = Path(folder)
             if not p.exists() or not p.is_dir():
                 logwriter.debug(f"Archive::import_folder._step_0() - folder path is invalid or not a folder")
-                messagebox.showinfo("Requested path not found or not a folder.")
+                win.showinfo("Import Files", "Requested path not found or not a folder.")
                 return
 
             logwriter.debug(f"Archive::import_folder._step_0() - folder path is valid")
@@ -734,7 +745,7 @@ class Archive():
             # inform user and return
             if len(files) <= 0: 
                 logwriter.debug(f"Archive::import_folder._step_0() - no files to import")
-                messagebox.showinfo("Empty Folder", f"No images found. Nothing to import.")
+                win.showwarning("Import Files", f"No images found. Nothing to import.")
                 return
 
             logwriter.info(f"Archive::import_folder) - {len(files)} files to import")
@@ -744,7 +755,7 @@ class Archive():
             # some fles may already be part of the archive or we already have a 
             # more recent version of the same file. But we will let the user know
             # this number anyways
-            if not  messagebox.askyesno("Confirm", f"{len(files)} images found. This may take a while. Proceed?"):
+            if not  win.askyesno("Confirm", f"{len(files)} images found. This may take a while. Proceed?"):
                 return
 
             # time to move on the next step for the real action
@@ -784,9 +795,6 @@ class Archive():
             win = AsyncProxy()
             win.exit_async_session(event)
 
-            # clean the status bar
-            win.reset_statusbar()
-
             # repair the temporary archive. If we cannot find a file there
             # it means we deleted it through cullng. f some files were not removed
             # during culling because of anyreason (like netwrk or hardware failure)
@@ -809,8 +817,6 @@ class Archive():
 
             win = AsyncProxy()
 
-            # clean the status bar
-            win.reset_statusbar()
             self.save()
 
             # let us prepare a list of file we think we have to delete
@@ -822,14 +828,14 @@ class Archive():
             # we will not proceed if we don't have anything to do
             if len(to_delete_files) <= 0:
                 logwriter.debug(f"Archive.cull._step_0() - no images found for culling")
-                messagebox.showinfo("Cull", f"No images found to be culled.")
+                win.showwarning("Cull", f"No images found to be culled.")
                 return
 
             logwriter.info(f"Archive.cull() - {len(to_delete_files)} files to remove")
 
             # warn the user that these fles will be removed from archive and also be 
             # removed from their current folder to bin folder
-            if not messagebox.askyesno("Confirmation", 
+            if not win.askyesno("Confirmation", 
                 f"Total {len(to_delete)} sets containing {len(to_delete_files)} files to be deleted. Proceed?"):
                 return
 
@@ -837,6 +843,7 @@ class Archive():
 
             if not self.lock():
                 logwriter.debug(f"Archive::cull._step_0() - failed to lock the archive")
+                win.showwarning("Cull", f"Failed to lock the archive")
                 return
 
             # from the list of files we think we have to delete, let us prepare a cull schedule
@@ -883,7 +890,7 @@ class Archive():
             if win.evaluate_async_outcome(event):
                 nonlocal job_count
                 logwriter.info(f"Archive.rebuild_previews() - {job_count} previews regenerated.")
-                messagebox.showinfo("Success", f"Preview regeneration Complete. {job_count} previews regenerated.")
+                win.showinfo("Rebuild Previews", f"Preview regeneration Complete. {job_count} previews regenerated.")
             else:
                 logwriter.info(f"Archive.rebuild_previews() did not complete successfully")
 
@@ -894,9 +901,6 @@ class Archive():
             logwriter.debug(f"Entering Archive.rebuild_previews._step_0()")
 
             win = AsyncProxy()
-
-            for stack in stacks:
-                stack.exifread()
 
             # get a list of stacks where there is no metadata
             preview_schedule = [
@@ -909,6 +913,7 @@ class Archive():
             
             if not self.lock():
                 logwriter.debug(f"Archive::rebuild_previews._step_0() - failed to lock the archive")
+                win.showwarning("Rebuild Previews", f"Failed to lock the archive")
                 return
 
             # like import_folder, we will create a shared catalog
@@ -959,7 +964,6 @@ class Archive():
 
             # first deactivate the custom event was added in step_1 to bring us here 
             win.exit_async_session( event)
-            win.reset_statusbar()
 
             self.unlock()
 
@@ -976,10 +980,10 @@ class Archive():
             # copying the required files
 
             if current_os != "Windows" or xrawstudio == "" or not Path(xrawstudio).exists():
-                messagebox.showinfo("Success", f"Export Complete. {job_count} raw images exported.")
+                win.showinfo("Export Files", f"Export Complete. {job_count} raw images exported.")
                 return
 
-            if not messagebox.askyesno("Success", f"Export Complete. {job_count} raw images exported. Would you like to open Fujifilm X Raw Studio and start editing?"):
+            if not win.askyesno("Export Files", f"Export Complete. {job_count} raw images exported. Would you like to open Fujifilm X Raw Studio and start editing?"):
                 return
 
             logwriter.debug(f"Archive.export_raws._step_1() - attempting to launch FUJIFILM X-RAW STUDIO")
@@ -1011,7 +1015,7 @@ class Archive():
             # inform user and return
             if len(files) <= 0: 
                 logwriter.info(f"Archive.export_jpegs() No image file(s) to be exported.")
-                messagebox.showinfo("No Files", f"No raw images found.")
+                win.showwarning("Export Files", f"No raw images found for export.")
                 return
 
             # let us create a copy schedue. We will copy the files and not move, just to be safe
@@ -1027,7 +1031,7 @@ class Archive():
 
             if job_count <= 0:
                 logwriter.info(f"Archive.export_jpegs() - No image file(s) to be exported.")
-                messagebox.showinfo("No Files", f"No raw images found to.")
+                win.showwarning("Export Files", f"No raw images found for export.")
                 return
 
             logwriter.info(f"Archive.export_jpegs() - {job_count} images to be exported.")
@@ -1038,6 +1042,7 @@ class Archive():
             # it is just a precautonary step
             if not self.lock():
                 logwriter.debug(f"Archive::export_raws._step_0() - failed to lock the archive")
+                win.showwarning("Export Files", f"Failed to lock the archive")
                 return
 
             # Fire the multi-process mechanism. start physically copying the files
@@ -1069,14 +1074,13 @@ class Archive():
 
             # first deactivate the custom event was added in step_1 to bring us here 
             win.exit_async_session(event)
-            win.reset_statusbar()
 
             self.unlock()
 
             nonlocal job_count
 
             logwriter.info(f"Archive.export_jpegs() - export complete. {job_count} images exported.")
-            messagebox.showinfo("Export Complete", f"{job_count} images exported.")
+            win.showinfo("Export Files", f"Operation completed. {job_count} jpeg images exported.")
 
         def _step_0():
             win = AsyncProxy()
@@ -1094,7 +1098,7 @@ class Archive():
 
             if job_count <= 0:
                 logwriter.info(f"Archive.export_jpegs() - No images to be exported")
-                messagebox.showinfo("No Files", f"No images found to be exported.")
+                win.showwarning("Export Files", f"No images found to be exported.")
                 return
 
             logwriter.info(f"Archive.export_jpegs() - {job_count} images to be exported")
@@ -1105,6 +1109,7 @@ class Archive():
             # it is just a precautonary step
             if not self.lock():
                 logwriter.debug(f"Archive::export_jpegs._step_0() - failed to lock the archive")
+                win.showwarning("Export Files", f"Failed to lock the archive")
                 return
 
             # FIre the multi-process mechanism. start physically copying the files
@@ -1182,11 +1187,11 @@ class Archive():
 
                 # switch on type of job command
                 if job.command == FileOps.Copy: 
-                    File.copy_to(job.source, job.destination)
+                    File.copy(job.source, job.destination)
                     desc = "Copying..."
 
                 elif job.command == FileOps.Move: 
-                    File.move_to(job.source, job.destination)
+                    File.move(job.source, job.destination)
                     desc = "Moving..."
 
                 elif job.command == FileOps.Delete: 
@@ -1223,6 +1228,11 @@ class Archive():
                 # if not, create a new stack
                 if stack is None:
                     stack = Stack()
+
+                # invalidate the metadata of the stack because new
+                # files are coming in and they may have been edited
+                # and now contains a different metadata
+                stack._metadata = None
 
                 # ask the stack to add this file to itself if it is found suitable.
                 stack.add(fo)

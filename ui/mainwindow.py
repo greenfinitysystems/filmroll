@@ -1,16 +1,15 @@
 # region(python_imports)
 
-import sys
 import logging
 import platform
+import sys
 import tkinter as tk
-import ttkbootstrap as tb
-from ui.messagebox import messagebox
-from tkinter import filedialog
-from tkinter import messagebox as sysmessagebox
 from enum import Enum
 from pathlib import Path
-from PIL import Image, ImageTk, ImageFont, ImageDraw
+from tkinter import filedialog
+from tkinter import messagebox as sysmessagebox
+import ttkbootstrap as tb
+from PIL import Image, ImageDraw, ImageFont, ImageTk
 
 # endregion
 
@@ -19,7 +18,13 @@ from PIL import Image, ImageTk, ImageFont, ImageDraw
 from core.archive import Archive
 from core.config import Config
 from core.proxy import AsyncProxy
-from ui.dialog import AboutDialog, RepairArchiveDialog, ArchivePropertyDialog, JpegExportDialog
+from ui.dialog import (
+    AboutDialog,
+    ArchivePropertyDialog,
+    JpegExportDialog,
+    RepairArchiveDialog,
+)
+from ui.messagebox import MessageBox
 from ui.thumbnailgrid import ThumbnailGrid
 
 # endregion
@@ -50,6 +55,7 @@ logwriter = logging.getLogger(__name__)
 logwriter.setLevel(Config().logger_log_level)
 
 import traceback
+
 
 def _debug_assert_(condition, message):
     if condition: return True
@@ -292,12 +298,24 @@ class FilmrollGUI:
     def report_error(self, message, e=None):
         logwriter.error(f"{message} => {str(e) if e is not None else 'Unexpected error'}")
         if e is not None:
-            messagebox.showerror("Error", str(e))
+            self.showerror("Error", str(e))
 
     def set_dirty(self):
         if self.doc is not None:
             self.doc.dirty = True
             self._root.title(self.doc.name + " *")
+
+    def showinfo(self, title, message):
+        MessageBox.showinfo(title=title, message=message, parent=self._root)
+
+    def showwarning(self, title, message):
+        MessageBox.showwarning(title=title, message=message, parent=self._root)
+
+    def showerror(self, title, message):
+        MessageBox.showerror(title=title, message=message, parent=self._root)
+
+    def askyesno(self, title, message) -> bool:
+        return MessageBox.askyesno(title=title, message=message, parent=self._root)
 
 # endregion
     
@@ -343,14 +361,14 @@ class FilmrollGUI:
     def on_closing(self):
         try:
 
-            if self._proxy.running():
-                if not messagebox.askyesno("Confirm", "Jobs running in background. Quit?"): return
+            if self._proxy.running:
+                if not self.askyesno("Confirm", "Jobs running in background. Quit?"): return
                 self._proxy.cancel_operation()
             
             self._proxy.stop()
 
             if self.doc is not None and self.doc.dirty:
-                resp = messagebox.askyesnocancel("Confirm", "There are unsaved changes. Save it?")
+                resp = sysmessagebox.askyesnocancel("Confirm", "There are unsaved changes. Save it?")
                 if resp is None: return
                 if resp: self.on_file_save()
 
@@ -358,15 +376,15 @@ class FilmrollGUI:
             self._root.destroy()
 
         except Exception as e:
-            messagebox.showerror("Critical Error", str(e))
+            sysmessagebox.showerror("Critical Error", str(e))
             sys.exit()
 
     def on_key(self, event):
         ctrl = (event.state & 0x0004) != 0
-        shift = (event.state & 0x0001) != 0
+        #shift = (event.state & 0x0001) != 0
 
         has_document = self.doc is not None
-        not_working = not self._proxy.running()
+        not_working = not self._proxy.running
 
         if ctrl and event.keysym.lower() == "n":
             if not_working:
@@ -454,7 +472,7 @@ class FilmrollGUI:
             # we have error in the archive
             # alert the user that the current archive need repair and fix
             # return if the user cancels
-            if messagebox.askyesno("Error", "Archive is corrupt or moved to another location. Fix it?"):
+            if self.askyesno("Error", "Archive is corrupt or moved to another location. Fix it?"):
                 self.on_file_repair()
             else:
                 self.doc = None
@@ -614,7 +632,7 @@ class FilmrollGUI:
 
         # sanity check. Cannot import from current archive's subfolder
         if self.doc.root.resolve() in Path(dir).resolve().parents:
-            messagebox.showerror("Error", "Cannot import subfolder of current archive.")
+            self.showerror("Error", "Cannot import subfolder of current archive.")
             return
 
         try:
@@ -657,7 +675,7 @@ class FilmrollGUI:
         if not self.doc:
             return
 
-        if not messagebox.askyesno("Confirm", 
+        if not self.askyesno("Confirm", 
             f"Rejected images will be moved to bin. Proceed?"):
             return
 
@@ -671,6 +689,8 @@ class FilmrollGUI:
             self.reset_statusbar()
 
     def on_edit_export_raws(self, stacks):
+        if not self.doc: return
+        
         # get the folder from user
         dir = filedialog.askdirectory(
             parent= self._root,
@@ -684,7 +704,7 @@ class FilmrollGUI:
         parents = Path(dir).resolve().parents
         for p in self.doc.syspaths:
             if Path(dir).resolve() == p.resolve() or p.resolve() in parents:
-                messagebox.showerror("Error", "Cannot copy to protected folders.", parent=self)
+                self.showerror("Error", "Cannot copy to protected folders.")
                 return
 
         try:
@@ -719,7 +739,7 @@ class FilmrollGUI:
         if stacks is None: stacks = self.doc._catalog.values()
 
         if len(stacks) <= 0: return
-        if not messagebox.askyesno("Confirm", 
+        if not self.askyesno("Confirm", 
             f"Previews for {len(stacks)} images will be regenerated. Proceed?"):
             return
 

@@ -1,16 +1,15 @@
 # region(python_imports)
 
-import logging
 import io
+import logging
 import math
-import rawpy
-import exiv2
-from pathlib import Path
 from functools import cache
+from pathlib import Path
 from typing import Any
-from PIL import Image, ImageOps, ImageDraw, ImageFont
 
-from scipy.ndimage import gaussian_filter1d
+import exiv2
+import rawpy
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 # endregion
 
@@ -41,7 +40,7 @@ class PreviewBuilder:
             return
 
         self._font_cache = {}
-        self._initialize = True
+        self._initialized = True
 
 # endregion
 
@@ -53,55 +52,6 @@ class PreviewBuilder:
 
 # region(methods)
 
-    def compute_histogram(self, source: str) -> tuple:
-        img = self._load(source)
-
-        img.thumbnail((256, 256))
-        
-        r, g, b = img.split()
-
-        hist_r = r.histogram()
-        hist_r_s = gaussian_filter1d(hist_r, sigma=2)
-
-        hist_g = g.histogram()
-        hist_g_s = gaussian_filter1d(hist_g, sigma=2)
-
-        hist_b = b.histogram()
-        hist_b_s = gaussian_filter1d(hist_b, sigma=2)
-
-        # img.convert('L')
-        # hist_w = img.histogram()
-        # hist_w_s = gaussian_filter1d(hist_w, sigma=2)
-
-        img.close()
-
-        # return (hist_r_s, hist_g_s, hist_b_s, hist_w_s)
-        return (hist_r_s, hist_g_s, hist_b_s)
-
-    def compute_histogram2(self, img: Image) -> tuple:
-
-        img.thumbnail((256, 256))
-        
-        r, g, b = img.split()
-
-        hist_r = r.histogram()
-        hist_r_s = gaussian_filter1d(hist_r, sigma=2)
-
-        hist_g = g.histogram()
-        hist_g_s = gaussian_filter1d(hist_g, sigma=2)
-
-        hist_b = b.histogram()
-        hist_b_s = gaussian_filter1d(hist_b, sigma=2)
-
-        # img.convert('L')
-        # hist_w = img.histogram()
-        # hist_w_s = gaussian_filter1d(hist_w, sigma=2)
-
-        img.close()
-
-        # return (hist_r_s, hist_g_s, hist_b_s, hist_w_s)
-        return (hist_r_s, hist_g_s, hist_b_s)
-
     def export_jpeg(self, source: str, destination: str, template: JpegExportTemplate, metadata: Any):
         if metadata is None or template is None:
             logwriter.debug(f"PreviewBuilder.export_jpeg() => either metadata or template argument is None")
@@ -109,8 +59,9 @@ class PreviewBuilder:
 
         th = self._load(source)
         th, size = self._transform(th, template, metadata)
-        th.save(destination, quality=template.export_quality)
-        th.close()
+
+        try: th.save(destination, quality=template.export_quality)
+        finally: th.close()
 
         self._copy_metadata(source, destination)
         logwriter.info(f"Jpeg exported => {destination}")

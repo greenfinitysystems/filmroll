@@ -1,39 +1,125 @@
 # region(python_imports)
 
-from ttkbootstrap.dialogs import Messagebox
+import logging
+from ttkbootstrap.dialogs import Messagebox, MessageDialog
 
 # endregion
 
 # region(project_imports)
 
-# Nothing here yet
+from core.config import Config
 
 # endregion
 
 # region(globals)
 
-# Nothing here yet
+logwriter = logging.getLogger(__name__)
+logwriter.setLevel(Config().logger_log_level)
 
 # endregion
 
-class messagebox:
+class MessageBox:
 
 # region(static_methods)
 
     @staticmethod
-    def showinfo(title, message):
-        Messagebox.show_info(message, title)
+    def showinfo(title, message, parent=None):
+        return MessageBox._show_dialog(
+            title=title,
+            message=message,
+            parent=parent,
+            icon="info-circle-fill",
+            buttons=["OK:primary"]
+        )
 
     @staticmethod
-    def askyesno(message, title):
-        response = Messagebox.yesno(title, message)
-        if response in ('Yes', 'yes', True):
-            return True
-        return False
+    def showwarning(title, message, parent=None):
+        return MessageBox._show_dialog(
+            title=title,
+            message=message,
+            parent=parent,
+            icon="exclamation-triangle-fill",
+            buttons=["OK:warning"]
+        )
 
     @staticmethod
-    def showerror(message, title):
-        Messagebox.show_error(title, message)
+    def showerror(title, message, parent=None):
+        return MessageBox._show_dialog(
+            title=title,
+            message=message,
+            parent=parent,
+            icon="exclamation-octagon-fill",
+            buttons=["OK:danger"]
+        )
+
+    @staticmethod
+    def askyesno(title, message, parent=None):
+        result = MessageBox._show_dialog(
+            title=title,
+            message=message,
+            parent=parent,
+            icon="question-circle-fill",
+            buttons=[
+                "Yes:primary",
+                "No:secondary"
+            ]
+        )
+
+        return result in ('Yes', 'yes', True)
+
+# endregion
+
+# region (private_methods)
+
+    @staticmethod
+    def _show_dialog(title, message, parent=None, icon=None, buttons=None):
+        """
+        Show a ttkbootstrap MessageDialog centered over the parent window.
+        This is implemented here rather than using Messagebox.show_xxx()
+        because on Windows, ttkbootstrap 2.2.2 may reposition a transient
+        Toplevel when it is deiconified. We therefore apply the final
+        geometry after the window has been mapped.
+        """
+        try:
+            # No parent: let ttkbootstrap handle the dialog normally.
+            if parent is None:
+                if buttons is None:
+                    return Messagebox.show_info(message=message, title=title, icon=icon)
+                dialog = MessageDialog(message=message, title=title, buttons=buttons, icon=icon)
+                return dialog.show()
+
+            # Create the themed dialog.
+            dialog = MessageDialog(message=message, title=title, parent=parent, buttons=buttons or ["OK:primary"], icon=icon)
+            dialog.build()
+            dialog._toplevel.deiconify()
+            dialog._toplevel.update_idletasks()
+
+            parent_x = parent.winfo_rootx()
+            parent_y = parent.winfo_rooty()
+            parent_width = parent.winfo_width()
+            parent_height = parent.winfo_height()
+
+            dialog_width = dialog._toplevel.winfo_width()
+            dialog_height = dialog._toplevel.winfo_height()
+
+            x = parent_x + (parent_width - dialog_width) // 2
+            y = parent_y + (parent_height - dialog_height) // 2
+
+            # IMPORTANT:
+            # Apply the position after deiconify(), because Windows can
+            # reposition a transient Toplevel during deiconify().
+            dialog._toplevel.geometry(f"+{x}+{y}")
+            dialog._toplevel.update_idletasks()
+
+            # Modal behavior.
+            dialog._toplevel.grab_set()
+            dialog._toplevel.wait_window()
+
+            return dialog._result
+
+        except Exception as e:
+            logwriter.debug(f"MessageBox._show_dialog() - error: {e}")
+            return None
 
 # endregion
 

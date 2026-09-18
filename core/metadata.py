@@ -145,7 +145,7 @@ class Metadata:
     def tags(self) -> str:
         return self._data.get('tags', '')
 
-    @comment.setter
+    @tags.setter
     def tags(self, value: str) -> None:
         self._data['tags'] = value
 
@@ -153,7 +153,7 @@ class Metadata:
 
 # region(methods)
 
-    def get_text(self):
+    def get_text(self, full: bool = False):
         lines = [
                 f"Camera: {self.camera}",
                 f"Lens: {self.lensmodel}",

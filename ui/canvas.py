@@ -1,21 +1,18 @@
 # region(python_imports)
 
-import math
 import logging
-import ttkbootstrap as tb
+import math
 import tkinter.font as tkfont
-from PIL import Image, ImageTk, ImageDraw, ImageOps
-import threading
 from enum import Enum
-import rawpy
+import ttkbootstrap as tb
+from PIL import Image, ImageDraw, ImageTk
 
 # endregion
 
 # region(project_imports)
 
-from core.preview import PreviewBuilder
 from core.config import Config
-from core.util import Rectangle
+from core.util import Rectangle, Util
 
 # endregion
 
@@ -49,7 +46,6 @@ class Canvas(tb.Canvas):
 
         self.configure(bg="#1e1e1e")
         self.grid(row=i // self._parent._cols, column=i % self._parent._cols, sticky="nsew", pady=(10,10), padx=(10,10))
-        self.configure(bg="#1e1e1e")
         self.bind("<Configure>", self._redraw)
         self.bind("<Button-1>", self._on_mouse_lbutton_press)
         self.bind("<B1-Motion>", self._on_mouse_move)
@@ -68,16 +64,11 @@ class Canvas(tb.Canvas):
         self._reset_image_data()
 
         self._stack = self._parent._stacks[self._pos]
-        if self._display_mode == DisplayMode.raw and self._stack.raw is not None:
-            with rawpy.imread(str(self._stack.raw)) as raw:
-                rgb_array = raw.postprocess(use_camera_wb=True, half_size=True)
-            self._image = ImageOps.exif_transpose(Image.fromarray(rgb_array))
-        elif self._display_mode == DisplayMode.jpeg and self._stack.jpg is not None:
-            self._image = ImageOps.exif_transpose(Image.open(self._stack.jpg))
-        elif self._display_mode == DisplayMode.preview and self._stack.low is not None:
-            self._image = Image.open(self._stack.low)
-        else:
-            self._image = Image.open(self._nopreview)
+        if self._display_mode == DisplayMode.raw: file = self._stack.raw
+        elif self._display_mode == DisplayMode.jpeg: file = self._stack.jpg
+        elif self._display_mode == DisplayMode.preview: file = self._stack.low
+        else: file = None
+        self._image = file.open() if file is not None else Image.open(self._nopreview)
 
 # endregion
 
@@ -169,26 +160,40 @@ class Canvas(tb.Canvas):
                 tags="notes_icon"
             )
 
-            # def onclick_menu(event):
-            #     self._active_local = i
-            #     self._redraw()
-            #     self._show_popup_menu(event.x_root, event.y_root)
-
-            # canvas.tag_bind("notes_icon", "<Button-1>", onclick_menu)
-
         # histogram overlay
         def _step_5():
-            if hasattr(self, "_histogram_thread") and self._histogram_thread is not None:
-                self._histogram_thread.join()
-
-            if self._histogram is not None:
-                self._redraw_histogram()
-            else:
-                self._histogram_thread = threading.Thread(target=self._redraw_histogram, args=()).start()
+            self._histogram = self._get_histogram()
+            
+            bm = int(min(self._rect.height, self._rect.width) * 0.1)
+            lm = int(min(self._rect.height, self._rect.width) * 0.05)
+    
+            width = self._histogram.width()
+            height = self._histogram.height()
+    
+            hist_rect = Rectangle(
+                left    = self._rect.right - lm - width,
+                top     = self._rect.bottom - bm - height,
+                right   = self._rect.right - lm,
+                bottom  = self._rect.bottom - bm,
+            )
+    
+            if not ( 
+                hist_rect.left > self._rect.left and 
+                hist_rect.top > self._rect.top
+            ):
+                return
+    
+            self.create_image(
+                hist_rect.left + width//2, 
+                hist_rect.top + height//2,
+                image=self._histogram
+            )
 
         # metadata overlay
         def _step_4():
-            text = self._stack.metadata.get_text()
+            full = (self._display_mode != DisplayMode.preview)
+            text = self._stack.metadata.get_text(full=full)
+
             lines = text.split("\n")
             font = tkfont.Font(family="Consolas", size=10)
             max_width = max(font.measure(line) for line in lines)
@@ -211,11 +216,17 @@ class Canvas(tb.Canvas):
             ):
                 return
 
-            self.create_rectangle(
-                box_rect.left, box_rect.top,
-                box_rect.right, box_rect.bottom,
-                fill="#1e1e1e",
-                outline=""
+            if self._metadata_bg is None:
+                self._metadata_bg = ImageTk.PhotoImage(Image.new(
+                    'RGBA', 
+                    (box_rect.width, box_rect.height), 
+                    (30,30,30,180)
+                ))
+
+            self.create_image(
+                box_rect.left + box_rect.width//2, 
+                box_rect.top + box_rect.height//2,
+                image=self._metadata_bg
             )
 
             self.create_text(
@@ -291,6 +302,7 @@ class Canvas(tb.Canvas):
             if self._display_mode in (DisplayMode.jpeg, DisplayMode.raw):
                 _step_9()
 
+            if True:
                 _step_10()
 
         try:
@@ -299,36 +311,7 @@ class Canvas(tb.Canvas):
                 _step_0()
 
         except Exception as e:
-            logwriter.debug(f"Failed to redraw canvas", e)
-
-    def _redraw_histogram(self):
-        if self._histogram is None:
-            self._histogram = self._compute_histogram()
-
-        bm = int(min(self._rect.height, self._rect.width) * 0.1)
-        lm = int(min(self._rect.height, self._rect.width) * 0.05)
-
-        width = self._histogram.width()
-        height = self._histogram.height()
-
-        hist_rect = Rectangle(
-            left    = self._rect.right - lm - width,
-            top     = self._rect.bottom - bm - height,
-            right   = self._rect.right - lm,
-            bottom  = self._rect.bottom - bm,
-        )
-
-        if not ( 
-            hist_rect.left > self._rect.left and 
-            hist_rect.top > self._rect.top
-        ):
-            return
-
-        self.create_image(
-            hist_rect.left + width//2, 
-            hist_rect.top + height//2,
-            image=self._histogram
-        )
+            logwriter.debug(f"Canvas._redraw() - Failed to redraw canvas {e}")
 
     def _on_mouse_lbutton_press(self, event):
         self._parent._active_local = self._pos
@@ -395,7 +378,7 @@ class Canvas(tb.Canvas):
             return "break"
 
         self._zoom_redraw_pending = True
-        self.after(16, self._process_zoom, direction, event.x, event.y)
+        self._zoom_thread = self.after(16, self._process_zoom, direction, event.x, event.y)
 
         return "break"
 
@@ -411,14 +394,21 @@ class Canvas(tb.Canvas):
         self._reset_image_data()
 
     def _reset_image_data(self):
+        self._histogram = None
+        
         if hasattr(self, "_image") and self._image is not None:
             self._image.close()
         self._image = None
 
-        if hasattr(self, "_histogram_thread") and self._histogram_thread is not None:
-            self._histogram_thread.join()
-        self._histogram_thread = None
-        self._histogram = None
+        if hasattr(self, "_pan_thread") and self._pan_thread is not None:
+            self.after_cancel(self._pan_thread)
+        self._pan_thread = None
+
+        if hasattr(self, "_zoom_thread") and self._zoom_thread is not None:
+            self.after_cancel(self._zoom_thread)
+        self._zoom_thread = None
+
+        self._metadata_bg = None
 
         self._cur_zoom = 0.0
         self._min_zoom = 0.0
@@ -443,7 +433,7 @@ class Canvas(tb.Canvas):
             return
 
         self._pan_redraw_pending = True
-        self.after(16, self._process_pan)
+        self._pan_thread = self.after(16, self._process_pan)
 
     def _pan_end(self):
         self._sync_drag = False
@@ -547,6 +537,7 @@ class Canvas(tb.Canvas):
 
     def _process_pan(self):
         self._pan_redraw_pending = False
+        self._pan_thread = None
 
         if self._drag_start is None:
             return
@@ -589,10 +580,11 @@ class Canvas(tb.Canvas):
 
         if self._pan_latest_pos is not None:
             self._pan_redraw_pending = True
-            self.after(16, self._process_pan)
+            self._pan_thread = self.after(16, self._process_pan)
 
     def _process_zoom(self, direction, mouse_x, mouse_y):
         self._zoom_redraw_pending = False
+        self._zoom_thread = None
 
         if self._zoom_latest_pos is None:
             return
@@ -638,46 +630,58 @@ class Canvas(tb.Canvas):
 
         if self._zoom_latest_pos is not None:
             self._zoom_redraw_pending = True
-            self.after(16, self._process_zoom)
+            self._zoom_thread = self.after(16, self._process_zoom)
 
-    def _compute_histogram(self):
-        pb = PreviewBuilder()
+    def _get_histogram(self):
+        def _generate(histogram, size, img):
+            hscale = size[0] / 255
+            color = ("red", "green", "blue", "white")
+            draw = ImageDraw.Draw(img)
 
-        stack = self._stack
-        
+            for x in range(255):
+                for c, hist in enumerate(histogram):
+                    draw.line( 
+                        [((x * hscale), (size[1] - hist[x])), 
+                        (((x + 1) * hscale), (size[1] - hist[x+1]))], 
+                        fill=color[c], 
+                        width=2
+                    )
+
+            return img
+
+        key = (self._stack.identity, self._display_mode)
+        if key in self._thumbnailgrid()._histogram_cache:
+            return self._thumbnailgrid()._histogram_cache[key]
+
+        hist = None
+        size = (255, 100)
+
         if self._display_mode == DisplayMode.raw:
-            if stack.raw is not None:
-                histogram = pb.compute_histogram2(self._image.copy())
-            else:
-                return
-        else:
-            if stack.jpg is not None:
-                histogram = pb.compute_histogram(str(stack.jpg))
-            else:
-                return
+            if self._stack.raw is not None:
+                with self._image.copy() as im:
+                    hist = Util.histogram(im, size)
 
-        hist_size = (255, 100)
+        elif self._display_mode == DisplayMode.jpeg:
+            if self._stack.jpg is not None:
+                with self._image.copy() as im:
+                    hist = Util.histogram(im, size)
 
-        for hist in histogram:
-            max_v = max(hist)
-            vscale = hist_size[1] / max_v if max_v != 0 else 0
-            for i, v in enumerate(hist):
-                hist[i] = v * vscale
+        elif self._display_mode == DisplayMode.preview:
+            if self._stack.jpg is not None:
+                with self._stack.jpg.open() as im:
+                    hist = Util.histogram(im, size)
 
-        hscale = hist_size[0] / 255
-        color = ("red", "green", "blue", "white")
+        with Image.new('RGBA', size, (30,30,30,180)) as img:
+            self._thumbnailgrid()._histogram_cache[key] = (
+                ImageTk.PhotoImage(_generate(hist, size, img))
+                if hist is not None else 
+                ImageTk.PhotoImage(img)
+            )
+    
+        return self._thumbnailgrid()._histogram_cache[key]
 
-        img = Image.new('RGBA', hist_size, (30,30,30,200))
-        draw = ImageDraw.Draw(img)
 
-        for x in range(255):
-            x1 = (x * hscale)
-            x2 = ((x + 1) * hscale)
-            for c, hist in enumerate(histogram):
-                draw.line( [(x1, hist_size[1] - hist[x]), 
-                    (x2, hist_size[1] - hist[x+1])], fill=color[c], width=2)
-
-        return ImageTk.PhotoImage(img)
+    def _thumbnailgrid(self):
+        return self._parent._parent
 
 # endregion
-

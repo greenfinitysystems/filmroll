@@ -1,15 +1,14 @@
 # region(python_imports)
 
 import logging
-import logging
 from typing import Any
 
 # endregion
 
 # region(project_imports)
 
-from core.file import File, FileType
 from core.config import Config
+from core.file import File, FileType
 
 # endregion
 
