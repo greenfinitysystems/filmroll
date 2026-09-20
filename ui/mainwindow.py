@@ -10,6 +10,7 @@ from tkinter import filedialog
 from tkinter import messagebox as sysmessagebox
 import ttkbootstrap as tb
 from PIL import Image, ImageDraw, ImageFont, ImageTk
+import copy
 
 # endregion
 
@@ -18,11 +19,13 @@ from PIL import Image, ImageDraw, ImageFont, ImageTk
 from core.archive import Archive
 from core.config import Config
 from core.proxy import AsyncProxy
+from core.tagstore import TagStore
 from ui.dialog import (
     AboutDialog,
     ArchivePropertyDialog,
     JpegExportDialog,
     RepairArchiveDialog,
+    ConfigDialog
 )
 from ui.messagebox import MessageBox
 from ui.thumbnailgrid import ThumbnailGrid
@@ -45,7 +48,9 @@ class FileMenu(Enum):
     separator_3 = 10
     properties = 11
     separator_4 = 12
-    exit = 13
+    options = 13
+    separator_5 = 14
+    exit = 15
 
 # endregion
 
@@ -119,7 +124,9 @@ class FilmrollGUI:
             self.file_menu.add_command(label="Add Files...", command=self.on_file_import_files)
             self.file_menu.add_command(label="Import Folder...", command=self.on_file_import_folder)
             self.file_menu.add_separator() #
-            self.file_menu.add_command(label="Properties...", command=self.on_file_properties)
+            self.file_menu.add_command(label="Archive Properties...", command=self.on_file_properties)
+            self.file_menu.add_separator() #
+            self.file_menu.add_command(label="Options...", command=self.on_file_options)
             self.file_menu.add_separator() #
             self.file_menu.add_command(label="Exit", command=self.on_file_exit)
 
@@ -198,7 +205,7 @@ class FilmrollGUI:
             self._proxy = AsyncProxy()
             self._proxy._host = self
             self._proxy.register_event("UPDATE_STATUSBAR", lambda data: self.update_statusbar(*data))
-            self._proxy.register_event("RELOAD_DOCUMENT", lambda data: self.on_file_open(data))
+            self._proxy.register_event("RELOAD_DOCUMENT", lambda data: self.on_file_reload(data))
             self._proxy.start()
 
             self._root.title(self._appname)
@@ -401,6 +408,55 @@ class FilmrollGUI:
                 self.on_file_save()
             return
 
+        if event.keysym == "F1":
+            self.on_help_about()
+            return
+
+# endregion
+
+# region(private_methods)
+
+    def on_file_reload(self, reload=True):
+        if not _debug_assert_(( self.doc is not None and self.doc.ready),
+            "FilmrollGUI.on_file_reload() - no active archive or archive busy"): return
+
+        try:            
+            arc_path = self.doc.path
+            viewstate = self.thumbnailgrid.backup_state()
+            # close the current active document, if any
+            self.on_file_close()
+
+            # open the document
+            self.doc = Archive.open(arc_path)
+
+            # important to check if this archive has errors
+            if not self.doc.check():
+                raise ValueError("Archive has issues")
+
+            # document is clean
+            self._root.title(self.doc.name)
+            self.thumbnailgrid.set_doc(self.doc, redraw=False)
+            self.thumbnailgrid.restore_state(viewstate)
+
+        except ValueError:
+            # we have error in the archive
+            # alert the user that the current archive need repair and fix
+            # return if the user cancels
+            if self.askyesno("Error", "Archive is corrupt or moved to another location. Fix it?"):
+                self.on_file_repair()
+            else:
+                self.doc = None
+
+        except Exception as e: 
+            self.report_error("FilrollGUI.on_file_reload() - Exception occured Archive.reload", str(e))
+
+            # safe to close any open document
+            self.on_file_close()
+
+        finally:
+            # clean up the status bar
+            self.reset_statusbar()
+
 # endregion
 
 # region(help_menu)
@@ -437,22 +493,16 @@ class FilmrollGUI:
             # clean up the status bar
             self.reset_statusbar()
 
-    def on_file_open(self, reload=False):
-        if reload and self.doc is None:
-            raise Exception("Reload failed. No active document.")
-
+    def on_file_open(self):
         # get the file name to open
         arc_path = filedialog.askopenfilename(title="Open Archive", initialdir=Path.home(),
-            filetypes=((f"{self._appname} archive", "*.far"), ("All files", "*.*"))
-        ) if not reload else self.doc.path
+            filetypes=((f"{self._appname} archive", "*.far"), ("All files", "*.*")))
 
         # if user cancels, return
         if not arc_path:
             return
 
-        existing_filters = self.thumbnailgrid._filters if reload else None
-
-        try: 
+        try:
             # close the current active document, if any
             self.on_file_close()
 
@@ -465,8 +515,7 @@ class FilmrollGUI:
 
             # document is clean
             self._root.title(self.doc.name)
-            
-            self.thumbnailgrid.set_doc(self.doc, existing_filters)
+            self.thumbnailgrid.set_doc(self.doc)
 
         except ValueError:
             # we have error in the archive
@@ -610,7 +659,7 @@ class FilmrollGUI:
         except Exception as e:
             # report error and reload the current documet to go back where we were
             self.report_error("Exception occured Archive.import_folder", str(e))
-            self.on_file_open(reload=True)
+            self.on_file_reload()
 
         finally:
             # clean up the status bar
@@ -642,7 +691,7 @@ class FilmrollGUI:
         except Exception as e:
             # report error and reload the current documet to go back where we were
             self.report_error("Exception occured Archive.import_folder", str(e))
-            self.on_file_open(reload=True)
+            self.on_file_reload()
 
         finally:
             # clean up the status bar
@@ -660,6 +709,9 @@ class FilmrollGUI:
 
         self.doc.save()
         self._root.title(self.doc.name)
+
+    def on_file_options(self):
+        ConfigDialog(parent=self._root).show()
 
     def on_file_exit(self):
         try:

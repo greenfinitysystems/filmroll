@@ -142,12 +142,22 @@ class Metadata:
         self._data['comment'] = value
 
     @property
-    def tags(self) -> str:
-        return self._data.get('tags', '')
+    def tags(self) -> list:
+        piped_string = self._data.get('tags', '')
+        return [tag for tag in piped_string.split('|') if tag]
 
     @tags.setter
-    def tags(self, value: str) -> None:
-        self._data['tags'] = value
+    def tags(self, value: list) -> None:
+        cfg = Config()
+        seen = set()
+        unique_tags = []
+        for tag in value or []:
+            tag = tag.strip().lower()
+            if tag and tag not in seen and "|" not in tag:
+                seen.add(tag)
+                unique_tags.append(tag)
+                cfg.tagstore.add(tag)
+        self._data['tags'] = '|'.join(unique_tags)
 
 # endregion
 

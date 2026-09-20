@@ -1,3 +1,7 @@
+## Filmroll Principle
+
+> Filmroll exists to minimize the time a photographer spends managing photographs on a computer. It is not intended to replace a RAW developer or become a comprehensive digital asset management system. Features should be added when they simplify the photographer's workflow, not merely because they are technically possible.
+
 ## Screenshots
 
 ### Archive & Thumbnail View

@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Any
 import ttkbootstrap as tb
 from PIL import Image, ImageTk
+import copy
 
 # endregion
 
@@ -12,7 +13,7 @@ from PIL import Image, ImageTk
 
 from core.archive import Archive
 from core.config import Config
-from ui.dialog import FilterDialog
+from ui.dialog import FilterDialog, BatchTagEditDialog
 from ui.loupe import Loupe
 
 # endregion
@@ -33,8 +34,10 @@ class EditMenu(Enum):
     seperator_1 = 3
     filter = 4
     seperator_2 = 5
-    edit_raw = 6
-    edit_jpg = 7
+    editRaw = 6
+    editJpeg = 7
+    seperator_3 = 8
+    editTags = 9
 
 class ViewMenu(Enum):
     toggleHideRejected = 0
@@ -55,14 +58,16 @@ class PreviewMenu(Enum):
 
 class ThumbnailGrid(tb.Frame):
 
+    FILTER_REJECTED = 1  # 0001
+    FILTER_RATING = 2  # 0010
+    FILTER_METADATA = 4  # 0100
+
 # region(class_methods)
 
     def __init__(self, parent, win):
         super().__init__(parent)
 
-        # rating filter apply
-        self._rating_filter = 9
-        self._has_filters = False
+        cfg = Config()
 
         self._parent = win
         self._menubar = self._parent.menubar
@@ -76,6 +81,8 @@ class ThumbnailGrid(tb.Frame):
         self._edit_menu.add_separator()
         self._edit_menu.add_command(label="Export Raw...", command=self._on_edit_export_raws)
         self._edit_menu.add_command(label="Export Jpeg...", command=self._on_edit_export_jpegs)
+        self._edit_menu.add_separator()
+        self._edit_menu.add_command(label="Tags...", command=self._on_edit_tags)
 
         self._preview_menu = tb.Menu(self._menubar, tearoff=0, postcommand=self._on_preview_menu_unfold)
         self._preview_menu.add_command(label="Build", command=self._onkey_b, accelerator="B")
@@ -94,11 +101,10 @@ class ThumbnailGrid(tb.Frame):
 
         self._canvas = tb.Canvas(self)
         self._canvas.pack(fill="both", expand=True)
-        self._canvas.configure(bg="#1e1e1e")
+        self._canvas.configure(bg=cfg.gallery_color)
 
         self._reset()
 
-        cfg = Config()
         self._nopreview = cfg.asset("thumb.jpg")
 
         # Bindings
@@ -125,7 +131,7 @@ class ThumbnailGrid(tb.Frame):
 
 # region(methods)
 
-    def set_doc(self, archive: Archive, custom_filters: list = None):
+    def set_doc(self, archive: Archive, redraw=True):
         if archive is None: return
 
         if self._doc: self.unset_doc()
@@ -144,12 +150,9 @@ class ThumbnailGrid(tb.Frame):
         ds = f"PRE {self._total_items} DOC {self._doc.file_count}"
         self._parent.docstat.set(ds)
 
-        self._filters = self._doc.get_filters()
+        self._metadata_filters = self._doc.get_filters()
 
-        if custom_filters is not None:
-            self._has_filters = self._copy_filters(custom_filters)
-            if self._has_filters or self._rating_filter != 9:
-                self._apply_filters()
+        if not redraw: return
 
         self._redraw()
         self._canvas.focus_set()
@@ -170,16 +173,20 @@ class ThumbnailGrid(tb.Frame):
             self._loupe._on_window_closing()
             self._reset()
 
-    def refresh(self):
+    def refresh(self) -> None:
         if not self._doc: return
+        self._parent.on_file_reload()
 
-        temp_doc = self._doc
-        temp_filters = self._filters
+    def backup_state(self) -> tuple:
+        return (self._thumb_size, self._active_filters, self._rating_filter, copy.deepcopy(self._metadata_filters))
 
-        self.unset_doc()
-        self.set_doc(temp_doc, temp_filters)
-
+    def restore_state(self, fstate: tuple) -> None:
+        if not self._doc: return
+        self._thumb_size, self._active_filters, self._rating_filter, filters = fstate
+        self._copy_metadata_filters(filters)
+        self._apply_filters()
         self._redraw()
+        self._canvas.focus_set()
 
 # endregion
 
@@ -226,10 +233,11 @@ class ThumbnailGrid(tb.Frame):
         self._start_y = 0
 
         # Filter state
-        self._has_filters = False
+        self._rating_filter = 9
+        self._active_filters = 0
 
-        if hasattr(self, '_filters'): self._filters.clear()
-        else: self._filters = []
+        if hasattr(self, '_metadata_filters'): self._metadata_filters.clear()
+        else: self._metadata_filters = []
 
         if hasattr(self, '_filtered_indices'): self._filtered_indices.clear()
         else: self._filtered_indices = set()
@@ -245,9 +253,6 @@ class ThumbnailGrid(tb.Frame):
         self._marquee_rect = None
         self._dragging = False
         self._drag_threshold = 5
-
-        # Deletion / rejection
-        self._hide_rejected = False
 
         self._redraw()
 
@@ -936,8 +941,7 @@ class ThumbnailGrid(tb.Frame):
     def _get_visible_indices(self):
         return [
             i for i in range(self._total_items) 
-            if i not in self._filtered_indices and
-            not (self._hide_rejected and self._items[i].rejected)
+            if i not in self._filtered_indices
         ]
 
     def _get_rejected_indices(self):
@@ -949,41 +953,61 @@ class ThumbnailGrid(tb.Frame):
     def _get_active_stack(self):
         return self._items[self._active_index]
 
+    def _evaluate_rejected_filter(self, item):
+            return not item.rejected
+    
     def _evaluate_rating_filter(self, item):
         return (self._rating_filter == 9) or (item.metadata.rating == self._rating_filter)
 
     def _evaluate_metadata_filter(self, item):
-        for f in self._filters:
-            if (len(f.selected_values) > 0) and (getattr(item.metadata, f.property) not in f.selected_values):
-                return False
+        for f in self._metadata_filters:
+            if len(f.selected_values) > 0:
+                value = getattr(item.metadata, f.property)
+                if isinstance(value, list):
+                    return any(item in f.selected_values for item in value)
+                else:
+                    if value not in f.selected_values:
+                        return False
         return True
 
     def _apply_filters(self):
         self._filtered_indices.clear()
-        for i in range(self._total_items):
-            if not self._evaluate_rating_filter(self._items[i]):
-                self._filtered_indices.add(i)
-                continue
-            if not self._evaluate_metadata_filter(self._items[i]):
-                self._filtered_indices.add(i)
 
-    def _remove_filters(self):
-        self._filtered_indices.clear()
         for i in range(self._total_items):
-            if not self._evaluate_rating_filter(self._items[i]):
-                self._filtered_indices.add(i)
+            if self._active_filters & ThumbnailGrid.FILTER_REJECTED:
+                if not self._evaluate_rejected_filter(self._items[i]):
+                    self._filtered_indices.add(i)
+                    continue
 
-    def _copy_filters(self, filters):
+            if self._active_filters & ThumbnailGrid.FILTER_RATING:
+                if not self._evaluate_rating_filter(self._items[i]):
+                    self._filtered_indices.add(i)
+                    continue
+
+            if self._active_filters & ThumbnailGrid.FILTER_METADATA:
+                if not self._evaluate_metadata_filter(self._items[i]):
+                    self._filtered_indices.add(i)
+                    continue
+
+    def _copy_metadata_filters(self, filters):
         has_filter = False
         for given_filter in filters:
-            for i, effective_filter in enumerate(self._filters):
-                if effective_filter.property == given_filter.property:
-                    effective_values_set = set(effective_filter.values)
-                    matching_values = [item for item in given_filter.selected_values if item in effective_values_set]
+            for i, my_filter in enumerate(self._metadata_filters):
+                if my_filter.property == given_filter.property:
+                    valid_values = set(my_filter.values)
+                    matching_values = [v for v in given_filter.selected_values if v in valid_values]
                     if len(matching_values) > 0:
-                        self._filters[i].selected_values.append(matching_values)
+                        self._metadata_filters[i].selected_values.clear()
+                        self._metadata_filters[i].selected_values.extend(matching_values)
                         has_filter = True
         return has_filter
+
+    def _toggle_filter(self, filter):
+        if self._active_filters & filter: self._active_filters &= ~filter
+        else: self._active_filters |= filter
+        self._apply_filters()
+        self._redraw()
+        self._canvas.focus_set()
 
 # endregion
 
@@ -1106,18 +1130,11 @@ class ThumbnailGrid(tb.Frame):
             return "break"
 
         # -------------------------
-        # Ctrl + R Rebuild Previews
-        # -------------------------
-        if ctrl and event.keysym.lower() == "r":
-            self._onkey_ctrl_r()
-            return "break"
-
-        # -------------------------
         # Ctrl + 1, 2, 3, 4, 5, 9 Toggle Rating Filter
         # -------------------------
 
         if ctrl and event.keysym in ("0", "1", "2", "3", "4", "5", "9", "KP_0", "KP_1", "KP_2", "KP_3", "KP_4", "KP_5", "KP_9"):
-            self._onkey_toggle_rating(event)
+            self._onkey_toggle_rating_filter(event)
             return "break"
 
         # -------------------------
@@ -1263,28 +1280,33 @@ class ThumbnailGrid(tb.Frame):
         self._loupe.show(stacks)
 
     def _on_edit_menu_unfold(self):
-        active = self._doc is not None and len(self._get_visible_indices()) > 0
 
+        active = self._doc is not None
         state = "normal" if active else "disabled"
+
+        self._edit_menu.entryconfig(EditMenu.filter.value, state=state)
+        self._edit_menu.entryconfigure(EditMenu.filter.value, 
+            label="Remove Filter" if (self._active_filters & ThumbnailGrid.FILTER_METADATA) else "Apply Filter...")
+
+        active = self._doc is not None and len(self._get_visible_indices()) > 0
+        state = "normal" if active else "disabled"
+
         self._edit_menu.entryconfig(EditMenu.selectAll.value, state=state)
         self._edit_menu.entryconfig(EditMenu.rejectSelected.value, state=state)
 
         state = "normal" if active and self._doc.ready else "disabled"
         self._edit_menu.entryconfig(EditMenu.cull.value, state=state)
 
-        self._edit_menu.entryconfig(EditMenu.filter.value, state=state)
-        self._edit_menu.entryconfigure(EditMenu.filter.value, 
-            label="Remove Filter" if self._has_filters else "Apply Filter...")
-
         state = "normal" if active and len(self._get_selected_stacks()) > 0 else "disabled"
-        self._edit_menu.entryconfig(EditMenu.edit_raw.value, state=state)
-        self._edit_menu.entryconfig(EditMenu.edit_jpg.value, state=state)
+        self._edit_menu.entryconfig(EditMenu.editRaw.value, state=state)
+        self._edit_menu.entryconfig(EditMenu.editJpeg.value, state=state)
+        self._edit_menu.entryconfig(EditMenu.editTags.value, state=state)
 
     def _on_view_menu_unfold(self):
         active = self._doc is not None and len(self._get_visible_indices()) > 0
 
         self._view_menu.entryconfigure(ViewMenu.toggleHideRejected.value, 
-            label="Show Rejected" if self._hide_rejected else "Hide Rejected")
+            label="Show Rejected" if (self._active_filters & ThumbnailGrid.FILTER_REJECTED) else "Hide Rejected")
 
         self._view_menu.entryconfig(ViewMenu.zoomIn.value, 
             state="normal" if (active and (self._thumb_size < self._max_size)) else "disabled")
@@ -1323,26 +1345,18 @@ class ThumbnailGrid(tb.Frame):
         self._parent._root.attributes("-fullscreen", self._fullscreen)
 
     def _onkey_ctrl_f(self):
-        # if we have filters remove the previously applied filters
-        # else ask user for filter parameters
-        # if custom_filter is not None, it will simply apply the supplied filters
-        if self._has_filters:
-            self._remove_filters()
-        else:
-            if FilterDialog(self._parent._root, self._filters).show():
-                self._apply_filters()
+        if not (self._active_filters & ThumbnailGrid.FILTER_METADATA):
+            if not FilterDialog(self._parent._root, self._metadata_filters).show():
+                return
 
-        self._has_filters = not self._has_filters
-        self._redraw()
-        self._canvas.focus_set()
+        self._toggle_filter(ThumbnailGrid.FILTER_METADATA)
 
     def _onkey_ctrl_a(self):
         self._selected_indices = self._visible_indices.copy()
         self._render_visible()
 
     def _onkey_ctrl_h(self):
-        self._hide_rejected = not self._hide_rejected
-        self._redraw()
+        self._toggle_filter(ThumbnailGrid.FILTER_REJECTED)
 
     def _onkey_ctrl_plus(self):
         self._ctrl_plus_minus(1)
@@ -1364,14 +1378,18 @@ class ThumbnailGrid(tb.Frame):
         if self._doc and self._doc.ready:
             self.refresh()
 
-    def _onkey_toggle_rating(self, event):
-        if event.char in ('0', '1', '2', '3', '4', '5', '9'):
-            self._rating_filter = int (event.char)
-        else:
-            self._rating_filter = int(event.keysym)
+    def _onkey_toggle_rating_filter(self, event):
+        self._rating_filter = (
+            int (event.char) 
+            if event.char in ('0', '1', '2', '3', '4', '5', '9') else
+            int(event.keysym)
+        )
 
+        self._active_filters |= ThumbnailGrid.FILTER_RATING
         self._apply_filters()
+
         self._redraw()
+        self._canvas.focus_set()
 
     # document modifications
 
@@ -1429,6 +1447,32 @@ class ThumbnailGrid(tb.Frame):
     def _onkey_ctrl_b(self):
         if self._doc is not None and self._doc.ready:
             self._parent.on_preview_rebuild_previews(self._doc.as_list())
+
+    def _on_edit_tags(self):
+        if self._doc is None or not self._doc.ready:
+            return
+
+        stacks = self._get_selected_stacks()
+        if len(stacks) <= 0:
+            return
+
+        cur_tags = []
+        for s in stacks:
+            cur_tags.extend(s.metadata.tags)
+
+        cur_tags = sorted(list(set(cur_tags)))
+        dlg = BatchTagEditDialog(self, cur_tags)
+        if not dlg.show():
+            return
+
+        for s in stacks:
+            existing_tags = s.metadata.tags
+            del_tags = dlg._del_tags
+            new_list = [v for v in existing_tags if v not in del_tags]
+            new_list.extend(dlg._add_tags)
+            s.metadata.tags = new_list
+
+        self._doc.save()
 
 # endregion
 

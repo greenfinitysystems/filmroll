@@ -12,12 +12,13 @@ from typing import Any
 # region(project_imports)
 
 from core.util import MetadataFilter, Util
+from core.tagstore import TagStore
 
 # endregion
 
 class Config:
 
-    __VERSION__ = "0.6.1"
+    __VERSION__ = "0.6.2"
 
 # region(class_methods)
 
@@ -42,10 +43,15 @@ class Config:
 
         self._conf_file = self._conf_path / "config.json"
         self._log_file = self._conf_path / "filmroll.log"
+        self._tag_file = self._conf_path / "filmroll-tags.json"
+
+        self._tagstore = TagStore(str(self._tag_file))
+        if save: self._tagstore.save()
 
         self._curr_conf = {}
 
         self.log_level = "Error"
+        self.gallery_color = "#1e1e1e"
         self.preview_size = 1024
         self.border_ratio = 0.04
         self.border_color = "#ffffff"
@@ -117,6 +123,19 @@ class Config:
         try:
             if str(value).lower() in valid:
                 self._curr_conf[attrib] = str(value).lower()
+        except:
+            pass
+
+    @property
+    def gallery_color(self) -> str:
+        return self._curr_conf["gallery_color"]
+
+    @gallery_color.setter
+    def gallery_color(self, value: Any) -> None:
+        attrib = "gallery_color"
+        try:
+            if Util.is_valid_hex_code(value):
+                self._curr_conf[attrib] = value
         except:
             pass
 
@@ -285,7 +304,16 @@ Created by Bibhas Das.
             MetadataFilter(property = "aperture",       label = "Aperture",         values=[], selected_values=[]),
             MetadataFilter(property = "iso",            label = "ISO",              values=[], selected_values=[]),
             MetadataFilter(property = "film",           label = "Film Simulation",  values=[], selected_values=[]),
+            MetadataFilter(property = "tags",           label = "Tags",             values=[], selected_values=[]),
         ]
+
+    @property
+    def tagfile(self) -> Path:
+        return self._tag_file
+
+    @property
+    def tagstore(self) -> Any:
+        return self._tagstore
 
 # endregion
 
@@ -355,3 +383,4 @@ Created by Bibhas Das.
         return True
 
 # endregion
+

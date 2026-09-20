@@ -1,9 +1,11 @@
 # region(python_imports)
 
+import sys
 import logging
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, scrolledtext
+from tkinter import filedialog, scrolledtext, colorchooser
+from tkinter.colorchooser import Chooser
 import ttkbootstrap as tb
 from PIL import Image, ImageTk
 
@@ -14,6 +16,8 @@ from PIL import Image, ImageTk
 from core.config import Config
 from core.util import JpegExportTemplate, Util
 from ui.messagebox import MessageBox
+from ui.multiselectdropdown import MultiSelectDropdown
+from ui.tageditor import TagEditor
 
 # endregion
 
@@ -104,7 +108,8 @@ class AboutDialog(Dialog):
 
     def __init__(self, parent: tk.Tk):
         cfg = Config()
-        super().__init__(parent=parent, width=460, height=380, title=f"About {cfg.appname}")
+        # super().__init__(parent=parent, width=460, height=380, title=f"About {cfg.appname}")
+        super().__init__(parent=parent, width=460, height=680, title=f"About {cfg.appname}")
 
     def body(self) -> None:
         frame = tb.Frame(self, padding=(20, 20))
@@ -138,11 +143,13 @@ class AboutDialog(Dialog):
 
         tb.Button(
             frame,
-            text="OK",
+            text="Close",
             width=12,
             command=self.on_cancel,
             bootstyle="primary"
         ).grid(row=2, column=0, pady=(15,15))
+
+        self.bind("<Key>", self.on_key)
 
 class RepairArchiveDialog(Dialog):
     def __init__(self, parent: tk.Tk, current_path: str):
@@ -199,35 +206,25 @@ class FilterDialog(Dialog):
     def __init__(self, parent: tk.Tk, filters: list):
         self._filters = filters
         self._variables = []
-        super().__init__(parent=parent, ok="Apply", height=440, title="Apply Filter")
+        super().__init__(parent=parent, ok="Apply", height=400, title="Apply Filter")
 
     def body(self) -> None:
         # our main grid
-        # main = tb.Frame(self, padx=25, pady=20)
         main = tb.Frame(self, padding=(25, 20))
         main.grid(row=0, column=0, sticky="nsew")
         main.columnconfigure(0, weight=0)
         main.columnconfigure(1, weight=1)
+        self._variables.clear()
 
         # for all the filter sets, create set of individual dropdown and label
-        # add a generic Any + Label name (like Any Camera) which represnts no selection
-        # also create an array of tk.StringVar for the dropdowns
+        # also create an array of variables for the dropdowns
         for i, f in enumerate(self._filters):
-            # f.values.insert(0, "Any " + f.label)
-            var = tk.StringVar()
-            self._variables.insert(i, var)
-
-            # create the GUI widgets
-            label = tb.Label(main, text=f.label )
-            label.grid(row=i, column=0, sticky="w", pady=10)
-            dropdown = tb.Combobox(main, textvariable=var, values=f.values, state='readonly')
+            tb.Label(main, text=f.label).grid(row=i, column=0, sticky="w", pady=10)
+            dropdown = MultiSelectDropdown(main, values=f.values, searchable=False,)
             dropdown.grid(row=i, column=1, sticky="ew", padx=(5,5), pady=(10,0), ipady=2)
-
-            # if previous values exists set it or select the top tem (Any ...)
+            self._variables.insert(i, dropdown)
             if len(f.selected_values) > 0:
-                dropdown.set(f.selected_values[0])
-            else:
-                dropdown.current(0)
+                dropdown.set(f.selected_values)
 
         # the base class body creates the rest of the form with Ok, cancel Buttons
         super().body()
@@ -235,10 +232,7 @@ class FilterDialog(Dialog):
     def validate(self) -> bool:
         for i, f in enumerate(self._filters):
             f.selected_values.clear()
-            text = self._variables[i].get()
-            if not text.startswith("Any"):
-                f.selected_values.append(text)
-
+            f.selected_values.extend(self._variables[i].get())
         return True
 
 class ArchivePropertyDialog(Dialog):
@@ -275,9 +269,10 @@ class ArchivePropertyDialog(Dialog):
         return True
 
 class UserCommentDialog(Dialog):
-    def __init__(self, parent: tk.Tk, comment):
+    def __init__(self, parent: tk.Tk, comment: str, tags:list = []):
         self._usernote = tk.StringVar(value=comment)
-        super().__init__(parent=parent, ok="Save", height=350, title="Image Notes")
+        self._tags = tags
+        super().__init__(parent=parent, ok="Save", width=650, height=500, title="Properties")
 
     def body(self) -> None:
         # our main grid
@@ -286,9 +281,15 @@ class UserCommentDialog(Dialog):
         main.columnconfigure(0, weight=1)
 
         label = tb.Label(main, text="Notes" )
-        label.grid(row=2, column=0, sticky="w", padx=5, pady=0)
+        label.grid(row=0, column=0, sticky="w", padx=5, pady=0)
         self._st = scrolledtext.ScrolledText(main, width=50, height=10)
-        self._st.grid(row=3, column=0, sticky="ew", padx=5, pady=5)
+        self._st.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
+
+        cfg = Config()
+        label = tb.Label(main, text="Tags" )
+        label.grid(row=2, column=0, sticky="w", padx=5, pady=(10,0))
+        self._tageditor = TagEditor(main, values=cfg.tagstore.get(), tags=self._tags, max_height=40)
+        self._tageditor.grid(row=3, column=0, sticky="ew", pady=0)
 
         self._st.insert('1.0', self._usernote.get())
 
@@ -298,6 +299,7 @@ class UserCommentDialog(Dialog):
 
     def validate(self) -> bool:
         self._usernote.set( self._st.get('1.0', 'end-1c'))
+        self._tags = self._tageditor.get()
         return True
 
 class JpegExportDialog(Dialog):
@@ -474,3 +476,146 @@ class JpegExportDialog(Dialog):
 
         return True
 
+class BatchTagEditDialog(Dialog):
+    def __init__(self, parent: tk.Tk, tags: list):
+        self._cur_tags = tags
+        self._del_tags = []
+        self._add_tags = []
+        super().__init__(parent=parent, ok="Apply", width=450, height=400, title="Apply Tags")
+
+    def body(self) -> None:
+        # our main grid
+        main = tb.Frame(self, padding=(25, 20))
+        main.grid(row=0, column=0, sticky="nsew")
+        main.columnconfigure(0, weight=1)
+
+        cfg = Config()
+
+        label = tb.Label(main, text="Remove Tags" )
+        label.grid(row=0, column=0, sticky="w", padx=5, pady=0)
+        self._del_te = TagEditor(main, values=self._cur_tags, tags=[], max_height=40, allowcreate=False)
+        self._del_te.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
+
+        
+        label = tb.Label(main, text="Add Tags" )
+        label.grid(row=2, column=0, sticky="w", padx=5, pady=(10,0))
+        self._add_te = TagEditor(main, values=cfg.tagstore.get(), tags=[], max_height=40)
+        self._add_te.grid(row=3, column=0, sticky="ew", padx=5, pady=5)
+
+        # the base class body creates the rst of the form with Ok, cancel Buttons
+        super().body()
+
+    def validate(self) -> bool:
+        self._del_tags = self._del_te.get()
+        self._add_tags = self._add_te.get()
+        return True
+
+class ConfigDialog(Dialog):
+    def __init__(self, parent: tk.Tk):
+        cfg = Config()
+
+        self._gallery_color = tk.StringVar(value=cfg.gallery_color)
+        self._border_color = tk.StringVar(value=cfg.border_color)
+        self._caption_color = tk.StringVar(value=cfg.caption_color)
+        self._preview_size = tk.StringVar(value=cfg.preview_size)
+        self._border_size = tk.IntVar(value=int(cfg.border_ratio * 100))
+        self._use_focal_groups = tk.IntVar(value=cfg.use_focal_groups)
+        self._log_level = tk.StringVar(value=cfg.log_level)
+
+        super().__init__(parent=parent, ok="Apply", width=450, height=400, title="Options")
+
+    def body(self) -> None:
+        # our main grid
+        main = tb.Frame(self, padding=(25, 20))
+        main.grid(row=0, column=0, sticky="nsew")
+        main.columnconfigure(0, weight=0)
+        main.columnconfigure(1, weight=1)
+        main.columnconfigure(2, weight=0)
+
+        browse_pad = (6,3)
+        loglevel = ["error", "warning", "info", "debug"]
+
+        row = 0
+
+        tb.Label(main, text="Log Level"
+        ).grid(row=row, column=0, sticky="w", padx=5, pady=0)
+        tb.Combobox(main, textvariable=self._log_level, values=loglevel, state='readonly'
+        ).grid(row=row, column=1, sticky="ew", padx=(6,4), pady=(0,6), ipady=0)
+
+        row += 1
+
+        label = tb.Label(main, text="Background Color" )
+        label.grid(row=row, column=0, sticky="w", padx=5, pady=0)
+        tb.Entry(main, textvariable=self._gallery_color, state='readonly',
+        ).grid(row=row, column=1, sticky="ew", padx=(6,6), pady=(0,6))
+        tb.Button(main, text="Pick…", width=8, padding=browse_pad,command=self._pick_gallery_color,
+        ).grid(row=row, column=2, padx=(6,4), pady=(0,6))
+
+        row += 1
+
+        label = tb.Label(main, text="Preview Border Color" )
+        label.grid(row=row, column=0, sticky="w", padx=5, pady=0)
+        tb.Entry(main, textvariable=self._border_color, state='readonly',
+        ).grid(row=row, column=1, sticky="ew", padx=(6,6), pady=(0,6))
+        tb.Button(main, text="Pick…", width=8, padding=browse_pad, command=self._pick_border_color,
+        ).grid(row=row, column=2, padx=(6,4), pady=(0,6))
+
+        row += 1
+        
+        label = tb.Label(main, text="Preview Caption Color" )
+        label.grid(row=row, column=0, sticky="w", padx=5, pady=0)
+        tb.Entry(main, textvariable=self._caption_color, state='readonly',
+        ).grid(row=row, column=1, sticky="ew", padx=(6,6), pady=(0,6))
+        tb.Button(main, text="Pick…", width=8, padding=browse_pad, command=self._pick_caption_color,
+        ).grid(row=row, column=2, padx=(6,4), pady=(0,6))
+
+        row += 1
+
+        tb.Label(main, text="Preview Size (px)"
+        ).grid(row=row, column=0, sticky="w", padx=5, pady=0)
+        tb.Combobox(main, textvariable=self._preview_size, values=Config().supported_preview_size, state='readonly'
+        ).grid(row=row, column=1, sticky="ew", padx=(6,4), pady=(0,6), ipady=0)
+
+        row += 1
+
+        tb.Label(main, text="Border Size (%)"
+        ).grid(row=row, column=0, sticky="w", padx=5, pady=0)
+        tb.Spinbox(main, from_=2, to=20, increment=1, 
+            textvariable=self._border_size, width=10, state="readonly"
+        ).grid(row=row, column=1, sticky="w", padx=(6,4), pady=(0,6))
+
+        row += 1
+
+        tb.Checkbutton(main, text="Use Focal Groups in Filter", variable=self._use_focal_groups,
+        ).grid(row=row, column=1, sticky="w", padx=(6,4), pady=(10,10))       
+
+        # the base class body creates the rst of the form with Ok, cancel Buttons
+        super().body()
+
+    def validate(self) -> bool:
+        cfg = Config()
+
+        cfg.log_level = self._log_level.get()
+        cfg.gallery_color = self._gallery_color.get()
+        cfg.border_color = self._border_color.get()
+        cfg.caption_color = self._caption_color.get()
+        cfg.preview_size = self._preview_size.get()
+        cfg.border_ratio = self._border_size.get() / 100.0
+        cfg.use_focal_groups = self._use_focal_groups.get()
+
+        cfg._save()
+        MessageBox.showinfo("Options", "Modified options will only take effect after restart.")
+
+        return True
+
+    def _pick_gallery_color(self):
+        color_code = colorchooser.askcolor(parent=self, title="Pick Color")
+        if color_code[1]: self._gallery_color.set(color_code[1])
+
+    def _pick_border_color(self):
+        color_code = colorchooser.askcolor(parent=self, title="Pick Color")
+        if color_code[1]: self._border_color.set(color_code[1])
+
+    def _pick_caption_color(self):
+        color_code = colorchooser.askcolor(parent=self, title="Pick Color")       
+        if color_code[1]: self._caption_color.set(color_code[1])

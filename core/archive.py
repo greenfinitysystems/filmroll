@@ -375,6 +375,8 @@ class Archive():
         with open(self._last_saved_loc, "w") as f:
             f.write(frozen_json)
 
+        Config().tagstore.save()
+
     # backs up current archive to a different file
     def backup(self) -> None:
         if not _debug_assert_(( self._root is not None),
@@ -1144,7 +1146,11 @@ class Archive():
         # and build an unique set for them
         for stack in self.as_list():
             if hasattr(stack.metadata, filter.property):
-                unique_values.add(getattr(stack.metadata, filter.property))
+                value = getattr(stack.metadata, filter.property)
+                if isinstance(value, list):
+                    unique_values.update(value)
+                else:
+                    unique_values.add(value)
 
         # convert the set into a list and sort the list
         # based on whether it represents a numeric list or text / mixed list
@@ -1162,7 +1168,7 @@ class Archive():
 
         # insert a dummy 'Any Camera' type value. This value to be ignores whoever
         # is using ths list. it represents that the particular filter is not set / used
-        ls.insert(0, "Any " + filter.label)
+        # ls.insert(0, "Any " + filter.label)
 
         return ls
 

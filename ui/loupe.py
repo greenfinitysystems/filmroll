@@ -36,12 +36,14 @@ class Loupe:
     def show(self, stacks):
         assert len(stacks) > 0, "No valid stack. Loupe cannot open"
 
+        cfg = Config()
+
         self._reset()
         self._stacks = stacks
 
         self._root = tb.Toplevel(self._parent._parent._root)
         self._root.iconphoto(False, self._parent._parent._icon)
-        self._root.configure(bg="#1e1e1e")
+        self._root.configure(bg=cfg.gallery_color)
 
         self._root.update_idletasks()
         self._root.geometry("1000x700")
@@ -209,9 +211,14 @@ class Loupe:
         self._redraw()
 
     def _onkey_n(self, event=None):
-        dlg = UserCommentDialog(self._root, self._current_stack().metadata.comment)
+        dlg = UserCommentDialog(self._root, 
+            self._current_stack().metadata.comment,
+            self._current_stack().metadata.tags
+        )
+
         if not dlg.show(): return
         self._current_stack().metadata.comment = dlg._usernote.get()
+        self._current_stack().metadata.tags = dlg._tags
         self._parent._doc.save()
         self._redraw()
 

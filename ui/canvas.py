@@ -44,7 +44,9 @@ class Canvas(tb.Canvas):
         self._reset()
         self._pos = i
 
-        self.configure(bg="#1e1e1e")
+        cfg = Config()
+
+        self.configure(bg=cfg.gallery_color)
         self.grid(row=i // self._parent._cols, column=i % self._parent._cols, sticky="nsew", pady=(10,10), padx=(10,10))
         self.bind("<Configure>", self._redraw)
         self.bind("<Button-1>", self._on_mouse_lbutton_press)
@@ -679,7 +681,6 @@ class Canvas(tb.Canvas):
             )
     
         return self._thumbnailgrid()._histogram_cache[key]
-
 
     def _thumbnailgrid(self):
         return self._parent._parent

@@ -1,4 +1,4 @@
-FILMROLL 0.6.1 — WINDOWS VERSION
+FILMROLL 0.6.2 — WINDOWS VERSION
 =================================
 
 Thank you for using Filmroll.
@@ -88,12 +88,6 @@ This Windows distribution does not include Fujifilm X RAW STUDIO.
 
 Filmroll is an independent open-source project and is not affiliated
 with, endorsed by, or sponsored by Fujifilm.
-
-VERSION
--------
-
-Filmroll 0.6.1-dev
-Windows distribution
 
 For source code, documentation and updates, please visit the official
 Filmroll GitHub repository.
