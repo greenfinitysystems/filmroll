@@ -18,7 +18,7 @@ from core.tagstore import TagStore
 
 class Config:
 
-    __VERSION__ = "0.6.2"
+    __VERSION__ = "0.7.0-dev"
 
 # region(class_methods)
 

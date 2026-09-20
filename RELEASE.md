@@ -1,4 +1,4 @@
-FILMROLL 0.6.2 — WINDOWS VERSION
+FILMROLL 0.7.0-dev — WINDOWS VERSION
 =================================
 
 Thank you for using Filmroll.
