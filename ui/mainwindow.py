@@ -10,7 +10,6 @@ from tkinter import filedialog
 from tkinter import messagebox as sysmessagebox
 import ttkbootstrap as tb
 from PIL import Image, ImageDraw, ImageFont, ImageTk
-import copy
 
 # endregion
 
@@ -19,7 +18,6 @@ import copy
 from core.archive import Archive
 from core.config import Config
 from core.proxy import AsyncProxy
-from core.tagstore import TagStore
 from ui.dialog import (
     AboutDialog,
     ArchivePropertyDialog,
@@ -176,6 +174,7 @@ class FilmrollGUI:
                 status_frame,
                 orient="horizontal",
                 mode="determinate",
+                bootstyle="primary"
             )
 
             self.progress.grid(row=0, column=3, sticky="ew")
@@ -772,7 +771,7 @@ class FilmrollGUI:
         if not self.doc: return
 
         try:
-            dlg = JpegExportDialog(self._root, self.doc.syspaths)
+            dlg = JpegExportDialog(self._root, self.doc.syspaths, title_suffix=f"[{len(stacks)} Images]")
             if dlg.show():
                 self.doc.export_jpegs(stacks, dlg.jpeg_export_template)
 

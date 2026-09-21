@@ -1,7 +1,6 @@
 # region(python_imports)
 
 import logging
-import pyperclip
 import ttkbootstrap as tb
 
 # endregion
@@ -10,7 +9,6 @@ import ttkbootstrap as tb
 
 from core.config import Config
 from ui.canvas import Canvas, DisplayMode
-from ui.dialog import UserCommentDialog
 
 # endregion
 
@@ -108,20 +106,20 @@ class Loupe:
         # Copy metadata to clipboard
         # -------------------------
         if ctrl and event.keysym == "c":
-            self._onkey_ctrl_c(event)
+            self._onkey_ctrl_c()
             return
 
         # -------------------------
         # Delete → toggle reject
         # -------------------------
-        if event.keysym == "Delete":
-            self._onkey_delete(event)
+        if event.keysym in ("Delete", "KP_Delete"):
+            self._onkey_delete()
             return
 
         # -------------------------
         # Navigation
         # -------------------------
-        if event.keysym in ("Left", "Right", "Up", "Down"):
+        if event.keysym in ("Left", "Right", "Up", "Down", "KP_Left", "KP_Right", "KP_Up", "KP_Down"):
             self._onkey_arrow(event)
             return
 
@@ -135,50 +133,54 @@ class Loupe:
         # -------------------------
         # n → Toggle notes
         # -------------------------
-        if event.keysym == "n":
-            self._onkey_n(event)
+        if event.keysym == "p":
+            self._onkey_p()
             return
 
         # -------------------------
         # m → Toggle metadata
         # -------------------------
         if event.keysym == "m":
-            self._onkey_m(event)
+            self._onkey_m()
             return
 
         # -------------------------
         # h → Toggle histogram
         # -------------------------
         if event.keysym == "h":
-            self._onkey_h(event)
+            self._onkey_h()
             return
 
         # -------------------------
         # j → Toggle original jpeg
         # -------------------------
         if event.keysym == "j":
-            self._onkey_j(event)
+            self._onkey_j()
             return
 
         # -------------------------
         # 0, 1, 2, 3 → Rating
         # -------------------------
-        if event.keysym in ("0", "1", "2", "3", "4", "5"):
-            self._onkey_rating(event.keysym)
-            return
+        if event.keysym in ("0", "1", "2", "3", "4", "5", "KP_0", "KP_1", "KP_2", "KP_3", "KP_4", "KP_5", "KP_9"):
+            nval = (
+                int (event.char)
+                if event.char in ('0', '1', '2', '3', '4', '5', '9')
+                else int(event.keysym)
+            )
+        
+            self._onkey_apply_rating(nval)
+            return "break"
+
+# endregion
+
+# region(user_events)
 
     def _onkey_esc(self, event):
         self._reset()
 
-    def _onkey_delete(self, event=None):
-        self._current_stack().rejected = not self._current_stack().rejected
-        self._redraw()
-        self._parent._doc.save()
-        self._parent._redraw()
-
     def _onkey_arrow(self, event):
         def _navigate_global():
-            if ( event.keysym not in ["Left", "Right"] or 
+            if ( event.keysym not in ("Left", "Right", "KP_Left", "KP_Right") or 
                 len(self._parent._get_visible_indices()) <= 0
             ):
                 return
@@ -192,17 +194,17 @@ class Loupe:
             self._active_local = 0
             self._show_histogram = False
             self._canvases[0].reload()
-    
+
         def _navigate_local():
             count = len(self._stacks)
     
-            if event.keysym == "Left":
+            if event.keysym in ("Left", "KP_Left"):
                 self._active_local = max(0, self._active_local - 1)
-            elif event.keysym == "Right":
+            elif event.keysym in ("Right", "KP_Right"):
                 self._active_local = min(count - 1, self._active_local + 1)
-            elif event.keysym == "Up":
+            elif event.keysym in ("Up", "KP_Up"):
                 self._active_local = max(0, self._active_local - self._cols)
-            elif event.keysym == "Down":
+            elif event.keysym in ("Down", "KP_Down"):
                 self._active_local = min(count - 1, self._active_local + self._cols)
             else: return
 
@@ -210,38 +212,15 @@ class Loupe:
         else: _navigate_local()
         self._redraw()
 
-    def _onkey_n(self, event=None):
-        dlg = UserCommentDialog(self._root, 
-            self._current_stack().metadata.comment,
-            self._current_stack().metadata.tags
-        )
-
-        if not dlg.show(): return
-        self._current_stack().metadata.comment = dlg._usernote.get()
-        self._current_stack().metadata.tags = dlg._tags
-        self._parent._doc.save()
-        self._redraw()
-
-    def _onkey_m(self, event=None):
+    def _onkey_m(self):
         self._show_metadata = not self._show_metadata
         self._redraw()
 
-    def _onkey_ctrl_c(self, event=None):
-        stack = self._stacks[0] if len(self._stacks) == 1 else self._stacks[self._active_local]
-        pyperclip.copy("\n".join([ f"Identity: {stack.identity}", stack.metadata.get_text_full(),]))
-
-    def _onkey_h(self, event=None):
+    def _onkey_h(self):
         self._show_histogram = not self._show_histogram
         self._redraw()
 
-    def _onkey_rating(self, number):
-        nval = int(number)
-        self._current_stack().metadata.rating = nval
-        self._parent._doc.save()
-        self._parent._redraw()
-        self._redraw()
-
-    def _onkey_j(self, event=None):
+    def _onkey_j(self):
         if self._display_mode == DisplayMode.preview:
             self._display_mode = DisplayMode.jpeg
         elif self._display_mode == DisplayMode.jpeg:
@@ -254,9 +233,29 @@ class Loupe:
 
         self._redraw()
 
+    # --
+
+    def _onkey_p(self):
+        self._parent._onkey_p(self._parent._indices([self._current_stack(),]))
+
+    def _onkey_delete(self):
+        self._parent._onkey_delete(self._parent._indices([self._current_stack(),]))
+
+    def _onkey_ctrl_c(self):
+        self._parent._onkey_ctrl_c(self._parent._indices([self._current_stack(),]))
+
+    def _onmenu_apply_rating(self, number):
+        self._parent._onmenu_apply_rating(self._parent._indices([self._current_stack(),]), number)
+
+    def _onmenu_export_raw(self):
+        self._parent._on_edit_export_raws(self._parent._indices([self._current_stack(),]))
+
+    def _onmenu_export_jpeg(self):
+        self._parent._on_edit_export_jpegs(self._parent._indices([self._current_stack(),]))
+
 # endregion
 
-# region(private_methhods)
+# region(private_methods)
 
     def _reset(self):
         if hasattr(self, "_canvases") and self._canvases is not None:
@@ -280,29 +279,36 @@ class Loupe:
         self._show_metadata = False
         self._show_histogram = False
         self._display_mode = DisplayMode.preview
-        
+
     def _current_stack(self):
         return self._stacks[self._active_local]
 
     def _show_popup_menu(self, x, y):
         menubutton = tb.Menubutton(self._root, text="Actions", bootstyle="primary")
         popup_menu = tb.Menu(menubutton, tearoff=0)
-        popup_menu.add_command(label="Edit notes...", accelerator="N", command= self._onkey_n)
+
+        popup_menu.add_command(label="Reject", accelerator="Del", command=lambda: self._onkey_delete())
+        popup_menu.add_command(label="Copy Metadata", accelerator="Ctrl+C", command=lambda: self._onkey_ctrl_c())
         popup_menu.add_separator()
-        popup_menu.add_command(label="Red", accelerator="1", command= lambda: self._onkey_rating("1"))
-        popup_menu.add_command(label="Blue", accelerator="2", command= lambda: self._onkey_rating("2"))
-        popup_menu.add_command(label="Green", accelerator="3", command= lambda: self._onkey_rating("3"))
-        popup_menu.add_command(label="Maroon", accelerator="3", command= lambda: self._onkey_rating("4"))
-        popup_menu.add_command(label="Orange", accelerator="3", command= lambda: self._onkey_rating("5"))
-        popup_menu.add_command(label="Unmark", accelerator="0", command= lambda: self._onkey_rating("0"))
+        popup_menu.add_command(label="Unmark", accelerator="0", command= lambda: self._onmenu_apply_rating(0))
+        popup_menu.add_command(label="Red", accelerator="1", command= lambda: self._onmenu_apply_rating(1))
+        popup_menu.add_command(label="Blue", accelerator="2", command= lambda: self._onmenu_apply_rating(2))
+        popup_menu.add_command(label="Green", accelerator="3", command= lambda: self._onmenu_apply_rating(3))
+        popup_menu.add_command(label="Maroon", accelerator="4", command= lambda: self._onmenu_apply_rating(4))
+        popup_menu.add_command(label="Orange", accelerator="5", command= lambda: self._onmenu_apply_rating(5))
         popup_menu.add_separator()
-        popup_menu.add_command(label="Original", accelerator="J", command= self._onkey_j)
-        popup_menu.add_command(label="Histogram", accelerator="H", command= self._onkey_h)
-        popup_menu.add_command(label="Metadata", accelerator="M", command= self._onkey_m)
-        popup_menu.add_command(label="Copy Metadata", accelerator="Ctrl+C", command= self._onkey_ctrl_c)
+        popup_menu.add_command(label="Source", accelerator="J", command=lambda: self._onkey_j())
+        popup_menu.add_command(label="Histogram", accelerator="H", command=lambda: self._onkey_h())
+        popup_menu.add_command(label="Metadata", accelerator="M", command=lambda: self._onkey_m())
         popup_menu.add_separator()
-        popup_menu.add_command(label="Reject/Accept", accelerator="Del", command= self._onkey_delete)
+        popup_menu.add_command(label="Export Raw...", command=lambda: self._onmenu_export_raw())
+        popup_menu.add_command(label="Export Jpeg...", command=lambda: self._onmenu_export_jpeg())
+        popup_menu.add_separator()
+        popup_menu.add_command(label="Properties...", accelerator="P", command=lambda: self._onkey_p())
+        
+
         menubutton['menu'] = popup_menu
         popup_menu.tk_popup(x, y)
 
 # endregion
+

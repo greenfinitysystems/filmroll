@@ -580,7 +580,8 @@ class Archive():
                 export_quality = 90,
                 border_size = cfg.border_ratio,
                 border_color = cfg.border_color,
-                border_exif = 1
+                border_exif = 1,
+                inject_iptc = 0,
             )
 
             # let us fire a multi-process pool to generate preview images
@@ -934,7 +935,8 @@ class Archive():
                 export_quality = 90,
                 border_size = cfg.border_ratio,
                 border_color = cfg.border_color,
-                border_exif = 1
+                border_exif = 1,
+                inject_iptc = 0,
             )
 
             # launch a multi-process pool to get the metadata
@@ -1171,11 +1173,6 @@ class Archive():
         # ls.insert(0, "Any " + filter.label)
 
         return ls
-
-        if not self.ready:
-            logwriter.debug(f"{func} - Archive is busy")
-            return False
-        return True
 
 # endregion
 

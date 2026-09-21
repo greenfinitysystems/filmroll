@@ -189,7 +189,7 @@ class AsyncProxy:
             while self.started:
                 event_data = self.event_queue.get_nowait()
                 event_name = event_data[0]
-                if event_name not in self.event_register: return
+                if event_name not in self.event_register: continue
                 self._threadpool.submit(self.event_register[event_name], event_data[1])
 
         except queue.Empty:

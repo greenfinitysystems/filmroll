@@ -1,6 +1,7 @@
 # region(python_imports)
 
 import logging
+import pyperclip
 from enum import Enum
 from typing import Any
 import ttkbootstrap as tb
@@ -13,7 +14,7 @@ import copy
 
 from core.archive import Archive
 from core.config import Config
-from ui.dialog import FilterDialog, BatchTagEditDialog
+from ui.dialog import FilterDialog, BatchIptcEditDialog, ImageIptcDialog
 from ui.loupe import Loupe
 
 # endregion
@@ -30,14 +31,13 @@ PADDING = 10
 class EditMenu(Enum):
     selectAll = 0
     rejectSelected = 1
-    cull = 2
-    seperator_1 = 3
-    filter = 4
-    seperator_2 = 5
-    editRaw = 6
-    editJpeg = 7
-    seperator_3 = 8
-    editTags = 9
+    copy = 2
+    cull = 3
+    seperator_1 = 4
+    filter = 5
+    seperator_2 = 6
+    editRaw = 7
+    editJpeg = 8
 
 class ViewMenu(Enum):
     toggleHideRejected = 0
@@ -50,9 +50,18 @@ class ViewMenu(Enum):
     refresh = 7
     fullScreen = 8
 
-class PreviewMenu(Enum):
+class ImageMenu(Enum):
     build = 0
     rebuildAll = 1
+    seperator_1 = 2
+    rate0 = 3
+    rate1 = 4
+    rate2 = 5
+    rate3 = 6
+    rate4 = 7
+    rate5 = 8
+    seperator_2 = 9
+    editIptc = 10
 
 # endregion
 
@@ -74,19 +83,27 @@ class ThumbnailGrid(tb.Frame):
 
         self._edit_menu = tb.Menu(self._menubar, tearoff=0, postcommand=self._on_edit_menu_unfold)
         self._edit_menu.add_command(label="Select All", command=self._onkey_ctrl_a, accelerator="Ctrl+A")
-        self._edit_menu.add_command(label="Reject", command=self._onkey_delete, accelerator="Del")
+        self._edit_menu.add_command(label="Reject", command=lambda: self._onkey_delete(list(self._selected_indices)), accelerator="Del")
+        self._edit_menu.add_command(label="Copy Metadata", command=lambda: self._onkey_ctrl_c(list(self._selected_indices)), accelerator="Ctrl+C")
         self._edit_menu.add_command(label="Cull", command=self._onkey_shift_delete, accelerator="Ctrl+Shift+Del")
         self._edit_menu.add_separator()
-        self._edit_menu.add_command(label="Apply Filter...", command=self._onkey_ctrl_f, accelerator="Ctrl+F")
+        self._edit_menu.add_command(label="Search...", command=self._onkey_ctrl_f, accelerator="Ctrl+F")
         self._edit_menu.add_separator()
-        self._edit_menu.add_command(label="Export Raw...", command=self._on_edit_export_raws)
-        self._edit_menu.add_command(label="Export Jpeg...", command=self._on_edit_export_jpegs)
-        self._edit_menu.add_separator()
-        self._edit_menu.add_command(label="Tags...", command=self._on_edit_tags)
+        self._edit_menu.add_command(label="Export Raw...", command=lambda: self._on_edit_export_raws(list(self._selected_indices)))
+        self._edit_menu.add_command(label="Export Jpeg...", command=lambda: self._on_edit_export_jpegs(list(self._selected_indices)))
 
         self._preview_menu = tb.Menu(self._menubar, tearoff=0, postcommand=self._on_preview_menu_unfold)
-        self._preview_menu.add_command(label="Build", command=self._onkey_b, accelerator="B")
-        self._preview_menu.add_command(label="Rebuild All", command=self._onkey_ctrl_b, accelerator="Ctrl+B")
+        self._preview_menu.add_command(label="Build Previews", command=lambda: self._onkey_b(list(self._selected_indices)), accelerator="B")
+        self._preview_menu.add_command(label="Rebuild All Previews", command=self._onkey_ctrl_b, accelerator="Ctrl+B")
+        self._preview_menu.add_separator()
+        self._preview_menu.add_command(label="Unmark",      command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 0), accelerator="0")
+        self._preview_menu.add_command(label="Red",    command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 1), accelerator="1")
+        self._preview_menu.add_command(label="Blue",   command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 2), accelerator="2")
+        self._preview_menu.add_command(label="Green",  command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 3), accelerator="3")
+        self._preview_menu.add_command(label="Maroon", command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 4), accelerator="4")
+        self._preview_menu.add_command(label="Orange", command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 5), accelerator="5")
+        self._preview_menu.add_separator()
+        self._preview_menu.add_command(label="Properties...", command=lambda: self._onkey_p(list(self._selected_indices)))
 
         self._view_menu = tb.Menu(self._menubar, tearoff=0, postcommand=self._on_view_menu_unfold)
         self._view_menu.add_command(label="Hide Rejected", command=self._onkey_ctrl_h, accelerator="Ctrl+H")
@@ -120,6 +137,8 @@ class ThumbnailGrid(tb.Frame):
         self._canvas.bind("<Double-Button-1>", self._on_open_preview)
         self._canvas.bind("<Return>", self._on_open_preview)
 
+        self._canvas.bind("<Button-3>", self._on_handle_rclick)
+
         self._canvas.bind("<Key>", self._on_key)
         self._canvas.focus_set()
 
@@ -144,8 +163,8 @@ class ThumbnailGrid(tb.Frame):
             self._identity_map[item.identity] = i
 
         self._menubar.insert_cascade("Help", label="View", menu=self._view_menu)
-        self._menubar.insert_cascade("View", label="Preview", menu=self._preview_menu)
-        self._menubar.insert_cascade("Preview", label="Edit", menu=self._edit_menu)
+        self._menubar.insert_cascade("View", label="Image", menu=self._preview_menu)
+        self._menubar.insert_cascade("Image", label="Edit", menu=self._edit_menu)
 
         ds = f"PRE {self._total_items} DOC {self._doc.file_count}"
         self._parent.docstat.set(ds)
@@ -162,7 +181,7 @@ class ThumbnailGrid(tb.Frame):
     def unset_doc(self):
         try:
             self._menubar.delete('Edit')
-            self._menubar.delete('Preview')
+            self._menubar.delete('Image')
             self._menubar.delete('View')
             self._parent.docstat.set("PRE 0 DOC 0")
             self._image_cache.clear()
@@ -187,6 +206,508 @@ class ThumbnailGrid(tb.Frame):
         self._apply_filters()
         self._redraw()
         self._canvas.focus_set()
+
+# endregion
+
+# region(event_handlers)
+
+    def _on_mouse_down(self, event: Any):
+        self._canvas.focus_set()
+
+        self._dragging = False
+        self._start_x = self._canvas.canvasx(event.x)
+        self._start_y = self._canvas.canvasy(event.y)
+
+    def _on_mouse_drag(self, event: Any):
+        x2 = self._canvas.canvasx(event.x)
+        y2 = self._canvas.canvasy(event.y)
+
+        dx = abs(x2 - self._start_x)
+        dy = abs(y2 - self._start_y)
+
+        if not self._dragging and (dx > self._drag_threshold or dy > self._drag_threshold):
+            self._dragging = True
+
+            self._marquee_rect = self._canvas.create_rectangle(
+                self._start_x, self._start_y, x2, y2,
+                outline="#4da3ff",
+                dash=(2, 2),
+                width=1,
+                tags="marquee"
+            )
+
+        if self._dragging:
+            self._canvas.coords(
+                self._marquee_rect,
+                min(self._start_x, x2),
+                min(self._start_y, y2),
+                max(self._start_x, x2),
+                max(self._start_y, y2)
+            )
+
+            ctrl = (event.state & 0x0004) != 0
+
+            self._update_marquee_selection(
+                min(self._start_x, x2),
+                min(self._start_y, y2),
+                max(self._start_x, x2),
+                max(self._start_y, y2),
+                ctrl
+            )
+
+    def _on_mouse_up(self, event: Any):
+        if not self._dragging:
+            self._on_handle_click(event)
+
+        if self._marquee_rect:
+            self._canvas.delete(self._marquee_rect)
+            self._marquee_rect = None
+
+    def _on_key(self, event: Any):
+        if self._total_items == 0:
+            return
+
+        ctrl = (event.state & 0x0004) != 0
+        shift = (event.state & 0x0001) != 0
+
+        # -------------------------------------------------------------------
+        # Ctrl + Shift + Key
+        # -------------------------------------------------------------------
+
+        # -------------------------
+        # Ctrl + Shift + Del Cull
+        # -------------------------
+        if shift and event.keysym in ("Delete", "KP_Delete"):
+            self._onkey_shift_delete()
+            return "break"
+
+        # -------------------------
+        # Ctrl + Shift + Zoom (anchor to active selection)
+        # -------------------------
+
+        if shift and ctrl and event.keysym in ("KP_Add", "equal", "plus", "=", "+"):
+            self._onkey_shift_ctrl_plus()
+            return "break"
+
+        if shift and ctrl and event.keysym in ("KP_Subtract", "minus", "underscore", "-", "_"):
+            self._onkey_shift_ctrl_minus()
+            return "break"
+
+        # -------------------------------------------------------------------
+        # Ctrl + Key
+        # -------------------------------------------------------------------
+
+        # -------------------------
+        # Ctrl + A Select All
+        # -------------------------
+        if ctrl and event.keysym.lower() == "a":
+            self._onkey_ctrl_a()
+            return "break"
+
+        # -------------------------
+        # Ctrl + B Rebuild All Previews
+        # -------------------------
+        if ctrl and event.keysym.lower() == "b":
+            self._onkey_ctrl_b()
+            return "break"
+
+        # -------------------------
+        # Ctrl + C Copy Metadata
+        # -------------------------
+        if ctrl and event.keysym.lower() == "c":
+            self._onkey_ctrl_c(list(self._selected_indices))
+            return "break"
+
+        # -------------------------
+        # Ctrl + F Apply Filter
+        # -------------------------
+
+        if ctrl and event.keysym.lower() == "f":
+            self._onkey_ctrl_f()
+            return "break"
+
+        # -------------------------
+        # Ctrl + H Toggle Hide Rejected
+        # -------------------------
+
+        if ctrl and event.keysym.lower() == "h":
+            self._onkey_ctrl_h()
+            return "break"
+
+        # -------------------------
+        # I IPTC Propertiews
+        # -------------------------
+
+        if event.keysym.lower() == "p":
+            self._onkey_p(list(self._selected_indices))
+            return "break"
+
+        # -------------------------
+        # Ctrl + 1, 2, 3, 4, 5, 9 Toggle Rating Filter
+        # -------------------------
+
+        if ctrl and event.keysym in ("0", "1", "2", "3", "4", "5", "9", "KP_0", "KP_1", "KP_2", "KP_3", "KP_4", "KP_5", "KP_9"):
+            self._onkey_toggle_rating_filter(event)
+            return "break"
+
+        # -------------------------
+        # Ctrl + / Ctrl - Zoom (anchor to active selection)
+        # -------------------------
+
+        if ctrl and event.keysym in ("KP_Add", "equal", "plus", "=", "+"):
+            self._onkey_ctrl_plus()
+            return "break"
+
+        if ctrl and event.keysym in ("KP_Subtract", "minus", "underscore", "-", "_"):
+            self._onkey_ctrl_minus()
+            return "break"
+
+        # -------------------------------------------------------------------
+        # Key
+        # -------------------------------------------------------------------
+
+        # -------------------------
+        # NumPad Enter
+        # -------------------------
+        if event.keysym in ("KP_Enter",):
+            self._on_open_preview(event)
+            return "break"
+        
+        # -------------------------
+        # Delete → Toggle Reject
+        # -------------------------
+        if event.keysym in ("Delete", "KP_Delete"):
+            self._onkey_delete(list(self._selected_indices))
+            return "break"
+
+        # -------------------------
+        # F5 Refresh
+        # -------------------------
+        if event.keysym == "F5":
+            self._onkey_f5()
+            return "break"
+
+        # -------------------------
+        # F11 Full Screen
+        # -------------------------
+        if event.keysym == "F11":
+            self._onkey_f11()
+            return "break"
+
+        # -------------------------
+        # 0, 1, 2, 3 → Rating
+        # -------------------------
+        if event.keysym in ("0", "1", "2", "3", "4", "5", "KP_0", "KP_1", "KP_2", "KP_3", "KP_4", "KP_5", "KP_9"):
+            nval = (
+                int (event.char)
+                if event.char in ('0', '1', '2', '3', '4', '5', '9')
+                else int(event.keysym)
+            )
+        
+            self._onmenu_apply_rating(list(self._selected_indices), nval)
+            return "break"
+
+        # -------------------------
+        # Navigate using Arrow keys, Home, End, Page Up/Down etc
+        # -------------------------
+        if event.keysym in ("Home", "End", "Next", "Prior", "Left", "Right", "Up", "Down", "KP_Up", "KP_Down", "KP_Left", "KP_Right"):
+            self._navigate(ctrl, shift, event)
+            return "break"
+
+        # -------------------------
+        # Build Previews
+        # -------------------------
+        if event.keysym.lower() == "b":
+            self._onkey_b(list(self._selected_indices))
+            return "break"
+
+    def _on_resize(self, event: Any):
+        self._redraw()
+
+    def _on_scroll(self, event: Any):
+        is_ctrl = (event.state & 0x0004) != 0
+
+        # ---------------------------------------------------------
+        # Ctrl + Wheel = Thumbnail zoom
+        # ---------------------------------------------------------
+        if is_ctrl:
+            self._on_handle_zoom(event)
+            return "break"
+
+        # ---------------------------------------------------------
+        # If the entire grid fits inside the viewport, there is
+        # nowhere to scroll.
+        # ---------------------------------------------------------
+        viewport_h = self._canvas.winfo_height()
+        max_y = max(0, self._total_height - viewport_h)
+
+        if max_y <= 0:
+            return "break"
+
+        # ---------------------------------------------------------
+        # Determine scroll direction.
+        # ---------------------------------------------------------
+        if event.num == 4:
+            delta = -1
+        elif event.num == 5:
+            delta = 1
+        else:
+            delta = int(-1 * (event.delta / 120))
+
+        if delta == 0:
+            return "break"
+
+        # ---------------------------------------------------------
+        # Scroll normally.
+        # ---------------------------------------------------------
+        self._canvas.yview_scroll(delta, "units")
+
+        # ---------------------------------------------------------
+        # Clamp the resulting viewport position.
+        # ---------------------------------------------------------
+        new_y = self._canvas.canvasy(0)
+        new_y = max(0, min(new_y, max_y))
+
+        self._canvas.yview_moveto(
+            new_y / max(1, self._total_height)
+        )
+
+        self._render_visible()
+
+        return "break"
+
+    def _on_open_preview(self, event: Any | None = None):
+        count = len(self._selected_indices)
+
+        if count == 0:
+            return
+
+        stacks = []
+
+        if count == 1:
+            stacks.append(self._items[next(iter(self._selected_indices))])
+
+        elif 2 <= count <= 4:
+            for i in list(self._selected_indices):
+                stacks.append(self._items[i])
+
+        else:
+            # fallback → active image
+            if self._active_index is not None:
+                stacks.append(self._items[self._active_index])
+
+        self._loupe.show(stacks)
+
+    def _on_edit_menu_unfold(self):
+
+        active = self._doc is not None and self._doc.ready
+        state = "normal" if active else "disabled"
+        self._edit_menu.entryconfig(EditMenu.filter.value, state=state)
+        self._edit_menu.entryconfigure(EditMenu.filter.value, 
+            label="Remove Search" if (self._active_filters & ThumbnailGrid.FILTER_METADATA) else "Search...")
+        self._edit_menu.entryconfig(EditMenu.cull.value, state=state)
+
+        active = self._doc is not None and len(self._get_visible_indices()) > 0
+        state = "normal" if active else "disabled"
+        self._edit_menu.entryconfig(EditMenu.selectAll.value, state=state)
+
+        active = self._doc is not None and self._doc.ready and len(self._get_visible_indices()) > 0 and len(self._get_selected_stacks()) > 0
+        state = "normal" if active else "disabled"
+        self._edit_menu.entryconfig(EditMenu.rejectSelected.value, state=state)
+        self._edit_menu.entryconfig(EditMenu.copy.value, state=state)
+        self._edit_menu.entryconfig(EditMenu.editRaw.value, state=state)
+        self._edit_menu.entryconfig(EditMenu.editJpeg.value, state=state)
+
+    def _on_view_menu_unfold(self):
+        active = self._doc is not None and len(self._get_visible_indices()) > 0
+
+        self._view_menu.entryconfigure(ViewMenu.toggleHideRejected.value, 
+            label="Show Rejected" if (self._active_filters & ThumbnailGrid.FILTER_REJECTED) else "Hide Rejected")
+
+        self._view_menu.entryconfig(ViewMenu.zoomIn.value, 
+            state="normal" if (active and (self._thumb_size < self._max_size)) else "disabled")
+
+        self._view_menu.entryconfig(ViewMenu.zoomOut.value, 
+            state="normal" if (active and (self._thumb_size > self._min_size)) else "disabled")
+
+        self._view_menu.entryconfig(ViewMenu.zoomMax.value, 
+            state="normal" if (active and (self._thumb_size < self._max_size)) else "disabled")
+
+        self._view_menu.entryconfig(ViewMenu.zoomMin.value, 
+            state="normal" if (active and (self._thumb_size > self._min_size)) else "disabled")
+
+        selcount = len(self._selected_indices)
+
+        self._view_menu.entryconfig(ViewMenu.image.value, 
+            state="normal" if (active and selcount > 0) else "disabled")
+
+        self._view_menu.entryconfig(ViewMenu.image.value, 
+            label="Compare" if (active and (selcount > 1) and (selcount <= 4)) else "Image")
+
+    def _on_preview_menu_unfold(self):
+        active = self._doc is not None and self._doc.ready and len(self._items) > 0
+        state = "normal" if active else "disabled"
+        self._preview_menu.entryconfig(ImageMenu.rebuildAll.value, state=state)
+
+        state = "normal" if active and len(self._get_selected_stacks()) > 0 else "disabled"
+        self._preview_menu.entryconfig(ImageMenu.build.value, state=state)
+
+        self._preview_menu.entryconfig(ImageMenu.rate0.value, state=state)
+        self._preview_menu.entryconfig(ImageMenu.rate1.value, state=state)
+        self._preview_menu.entryconfig(ImageMenu.rate2.value, state=state)
+        self._preview_menu.entryconfig(ImageMenu.rate3.value, state=state)
+        self._preview_menu.entryconfig(ImageMenu.rate4.value, state=state)
+        self._preview_menu.entryconfig(ImageMenu.rate5.value, state=state)
+
+        self._preview_menu.entryconfig(ImageMenu.editIptc.value, state=state)
+
+# endregion
+
+# region(user_events)
+
+    def _onkey_f11(self):
+        self._fullscreen = not self._fullscreen
+        self._parent._root.attributes("-fullscreen", self._fullscreen)
+
+    def _onkey_ctrl_f(self):
+        if not (self._active_filters & ThumbnailGrid.FILTER_METADATA):
+            if not FilterDialog(self._parent._root, self._metadata_filters).show():
+                return
+
+        self._toggle_filter(ThumbnailGrid.FILTER_METADATA)
+
+    def _onkey_ctrl_a(self):
+        self._selected_indices = self._visible_indices.copy()
+        self._render_visible()
+
+    def _onkey_ctrl_h(self):
+        self._toggle_filter(ThumbnailGrid.FILTER_REJECTED)
+
+    def _onkey_ctrl_plus(self):
+        self._ctrl_plus_minus(1)
+
+    def _onkey_ctrl_minus(self):
+        self._ctrl_plus_minus(-1)
+
+    def _onkey_shift_ctrl_plus(self):
+        self._zoom_latest_pos = (None, None)
+        self._zoom_latest_direction = 1
+        self._zoom_by(True)
+
+    def _onkey_shift_ctrl_minus(self):
+        self._zoom_latest_pos = (None, None)
+        self._zoom_latest_direction = -1
+        self._zoom_by(True)
+
+    def _onkey_f5(self):
+        if self._doc and self._doc.ready:
+            self.refresh()
+
+    def _onkey_toggle_rating_filter(self, event):
+        self._rating_filter = (
+            int (event.char) 
+            if event.char in ('0', '1', '2', '3', '4', '5', '9') else
+            int(event.keysym)
+        )
+
+        self._active_filters |= ThumbnailGrid.FILTER_RATING
+        self._apply_filters()
+
+        self._redraw()
+        self._canvas.focus_set()
+
+    # ------
+
+    def _onkey_ctrl_c(self, indices: list) -> Any:
+        text_lines = []
+        stacks = self._stacks(indices)
+        for stack in stacks:
+            text_lines.append("\n".join([ f"Identity: {stack.identity}", stack.metadata.get_text(full=True),]))
+
+        pyperclip.copy("\n--\n".join(text_lines))
+
+    def _onmenu_apply_rating(self, indices: list, rating: int) -> int:
+        stacks = self._stacks(indices)
+        for stack in stacks:
+            stack.metadata.rating = rating
+    
+        self._doc.save()
+        self._redraw()
+        self._loupe._redraw()
+
+    def _onkey_delete(self, indices: list) -> None:
+        if not self._doc or not self._doc.ready:
+            return
+
+        stacks = self._stacks(indices)
+        for stack in stacks:
+            stack.rejected = not stack.rejected
+
+        self._doc.save()
+        self._redraw()
+        self._loupe._redraw()
+
+    def _on_edit_export_raws(self, indices: list) -> None:
+        if self._doc is not None and self._doc.ready:
+            stacks = self._stacks(indices)
+            if len(stacks) > 0:
+                self._parent.on_edit_export_raws(stacks)
+
+    def _on_edit_export_jpegs(self, indices: list) -> None:
+        if self._doc is not None and self._doc.ready:
+            stacks = self._stacks(indices)
+            if len(stacks) > 0:
+                self._parent.on_edit_export_jpegs(stacks)
+
+    def _onkey_b(self, indices:list) -> None:
+        if self._doc is not None and self._doc.ready:
+            self._parent.on_preview_rebuild_previews(self._stacks(indices))
+
+    def _onkey_p(self, indices: list) -> None:
+        if len(indices) == 1:
+            dlg = ImageIptcDialog(self._parent._root, self._items[indices[0]].metadata.get_iptcinfo())
+            if not dlg.show(): return
+            self._items[indices[0]].metadata.set_iptcinfo(dlg._iptcinfo)
+
+        elif len(indices) > 1:
+            stacks = self._stacks(indices)
+
+            cur_tags = []
+            for s in stacks:
+                cur_tags.extend(s.metadata.tags)
+    
+            cur_tags = sorted(list(set(cur_tags)))
+            dlg = BatchIptcEditDialog(self, cur_tags, f"[{len(indices)} Images]")
+            if not dlg.show():
+                return
+    
+            for s in stacks:
+                existing_tags = s.metadata.tags
+                del_tags = dlg._del_tags
+                new_list = [v for v in existing_tags if v not in del_tags]
+                new_list.extend(dlg._add_tags)
+                s.metadata.tags = new_list
+
+                if (s.metadata.author and dlg._overwrite.get() == 1) or not s.metadata.author:
+                    s.metadata.author = dlg._author.get()
+
+                if (s.metadata.copyright and dlg._overwrite.get() == 1) or not s.metadata.copyright:
+                    s.metadata.copyright = dlg._copyright.get()
+
+        else:
+            pass
+    
+        self._doc.save()
+
+    # ------
+
+    def _onkey_shift_delete(self) -> None:
+        if self._doc and self._doc.ready:
+            self._parent.on_edit_cull()
+
+    def _onkey_ctrl_b(self) -> None:
+        if self._doc is not None and self._doc.ready:
+            self._parent.on_preview_rebuild_previews(self._doc.as_list())
 
 # endregion
 
@@ -497,18 +1018,8 @@ class ThumbnailGrid(tb.Frame):
         self._render_visible()
 
     def _on_handle_click(self, event: Any):
-        canvas_x = self._canvas.canvasx(event.x)
-        canvas_y = self._canvas.canvasy(event.y)
-
-        col = int((canvas_x - self._gap) // self._cell)
-        row = int(canvas_y // self._cell)
-
-        flat_index = row * self._columns + col
-        if flat_index >= len(self._visible_indices):
-            return
-        index = self._visible_indices[flat_index]
-
-        if index < 0 or index >= self._total_items:
+        index = self._get_clicked_index(event)
+        if index < 0:
             return
 
         ctrl = (event.state & 0x0004) != 0
@@ -528,6 +1039,11 @@ class ThumbnailGrid(tb.Frame):
 
         self._active_index = index
         self._render_visible()
+
+    def _on_handle_rclick(self, event: Any):
+        index = self._get_clicked_index(event)
+        if index >= 0:
+            self._show_popup_menu(event.x_root, event.y_root, index)
 
     def _navigate(self, ctrl, shift, event):
         # -------------------------
@@ -599,6 +1115,9 @@ class ThumbnailGrid(tb.Frame):
             new_flat = max(0, min(len(self._visible_indices) - 1, new_flat))
 
             new_index = self._visible_indices[new_flat]
+
+        else:
+            return
 
         # -------------------------
         # Clamp Index
@@ -1009,470 +1528,64 @@ class ThumbnailGrid(tb.Frame):
         self._redraw()
         self._canvas.focus_set()
 
-# endregion
+    def _get_clicked_index(self, event: Any) -> int:
+        canvas_x = self._canvas.canvasx(event.x)
+        canvas_y = self._canvas.canvasy(event.y)
 
-# region(event_handlers)
+        col = int((canvas_x - self._gap) // self._cell)
+        row = int(canvas_y // self._cell)
 
-    def _on_mouse_down(self, event: Any):
-        self._canvas.focus_set()
+        flat_index = row * self._columns + col
+        if flat_index >= len(self._visible_indices):
+            return -1
+        index = self._visible_indices[flat_index]
 
-        self._dragging = False
-        self._start_x = self._canvas.canvasx(event.x)
-        self._start_y = self._canvas.canvasy(event.y)
+        if index < 0 or index >= self._total_items:
+            return -1
 
-    def _on_mouse_drag(self, event: Any):
-        x2 = self._canvas.canvasx(event.x)
-        y2 = self._canvas.canvasy(event.y)
+        return index
 
-        dx = abs(x2 - self._start_x)
-        dy = abs(y2 - self._start_y)
+    def _show_popup_menu(self, x, y, index) -> None:
+        indices = (
+            list(self._selected_indices)
+            if len(self._selected_indices) > 1 and index in self._selected_indices
+            else [index,]
+        )
 
-        if not self._dragging and (dx > self._drag_threshold or dy > self._drag_threshold):
-            self._dragging = True
+        menubutton = tb.Menubutton(self._parent._root, text="Actions", bootstyle="primary")
+        popup_menu = tb.Menu(menubutton, tearoff=0)
 
-            self._marquee_rect = self._canvas.create_rectangle(
-                self._start_x, self._start_y, x2, y2,
-                outline="#4da3ff",
-                dash=(2, 2),
-                width=1,
-                tags="marquee"
-            )
-
-        if self._dragging:
-            self._canvas.coords(
-                self._marquee_rect,
-                min(self._start_x, x2),
-                min(self._start_y, y2),
-                max(self._start_x, x2),
-                max(self._start_y, y2)
-            )
-
-            ctrl = (event.state & 0x0004) != 0
-
-            self._update_marquee_selection(
-                min(self._start_x, x2),
-                min(self._start_y, y2),
-                max(self._start_x, x2),
-                max(self._start_y, y2),
-                ctrl
-            )
-
-    def _on_mouse_up(self, event: Any):
-        if not self._dragging:
-            self._on_handle_click(event)
-
-        if self._marquee_rect:
-            self._canvas.delete(self._marquee_rect)
-            self._marquee_rect = None
-
-    def _on_key(self, event: Any):
-        if self._total_items == 0:
-            return
-
-        ctrl = (event.state & 0x0004) != 0
-        shift = (event.state & 0x0001) != 0
-
-        # -------------------------------------------------------------------
-        # Ctrl + Shift + Key
-        # -------------------------------------------------------------------
-
-        # -------------------------
-        # Ctrl + Shift + Del Cull
-        # -------------------------
-        if shift and event.keysym in ("Delete", "KP_Delete"):
-            self._onkey_shift_delete()
-            return "break"
-
-        # -------------------------
-        # Ctrl + Shift + Zoom (anchor to active selection)
-        # -------------------------
-
-        if shift and ctrl and event.keysym in ("KP_Add", "equal", "plus", "=", "+"):
-            self._onkey_shift_ctrl_plus()
-            return "break"
-
-        if shift and ctrl and event.keysym in ("KP_Subtract", "minus", "underscore", "-", "_"):
-            self._onkey_shift_ctrl_minus()
-            return "break"
-
-        # -------------------------------------------------------------------
-        # Ctrl + Key
-        # -------------------------------------------------------------------
-
-        # -------------------------
-        # Ctrl + A Select All
-        # -------------------------
-        if ctrl and event.keysym.lower() == "a":
-            self._onkey_ctrl_a()
-            return "break"
-
-        # -------------------------
-        # Ctrl + B Rebuild All Previews
-        # -------------------------
-        if ctrl and event.keysym.lower() == "b":
-            self._onkey_ctrl_b()
-            return "break"
-
-        # -------------------------
-        # Ctrl + F Apply Filter
-        # -------------------------
-
-        if ctrl and event.keysym.lower() == "f":
-            self._onkey_ctrl_f()
-            return "break"
-
-        # -------------------------
-        # Ctrl + H Toggle Hide Rejected
-        # -------------------------
-
-        if ctrl and event.keysym.lower() == "h":
-            self._onkey_ctrl_h()
-            return "break"
-
-        # -------------------------
-        # Ctrl + 1, 2, 3, 4, 5, 9 Toggle Rating Filter
-        # -------------------------
-
-        if ctrl and event.keysym in ("0", "1", "2", "3", "4", "5", "9", "KP_0", "KP_1", "KP_2", "KP_3", "KP_4", "KP_5", "KP_9"):
-            self._onkey_toggle_rating_filter(event)
-            return "break"
-
-        # -------------------------
-        # Ctrl + / Ctrl - Zoom (anchor to active selection)
-        # -------------------------
-
-        if ctrl and event.keysym in ("KP_Add", "equal", "plus", "=", "+"):
-            self._onkey_ctrl_plus()
-            return "break"
-
-        if ctrl and event.keysym in ("KP_Subtract", "minus", "underscore", "-", "_"):
-            self._onkey_ctrl_minus()
-            return "break"
-
-        # -------------------------------------------------------------------
-        # Key
-        # -------------------------------------------------------------------
-
-        # -------------------------
-        # NumPad Enter
-        # -------------------------
-        if event.keysym in ("KP_Enter",):
-            self._on_open_preview(event)
-            return "break"
+        popup_menu.add_command(label="Reject", accelerator="Del", command=lambda: self._onkey_delete(indices))
+        popup_menu.add_command(label="Copy Metadata", accelerator="Ctrl+C", command=lambda: self._onkey_ctrl_c(indices))
+        popup_menu.add_separator()
+        popup_menu.add_command(label="Unmark", accelerator="0", command= lambda: self._onmenu_apply_rating(indices, 0))
+        popup_menu.add_command(label="Red", accelerator="1", command= lambda: self._onmenu_apply_rating(indices, 1))
+        popup_menu.add_command(label="Blue", accelerator="2", command= lambda: self._onmenu_apply_rating(indices, 2))
+        popup_menu.add_command(label="Green", accelerator="3", command= lambda: self._onmenu_apply_rating(indices, 3))
+        popup_menu.add_command(label="Maroon", accelerator="4", command= lambda: self._onmenu_apply_rating(indices, 4))
+        popup_menu.add_command(label="Orange", accelerator="5", command= lambda: self._onmenu_apply_rating(indices, 5))
+        popup_menu.add_separator()
+        popup_menu.add_command(label="Export Raw...", command=lambda: self._on_edit_export_raws(indices))
+        popup_menu.add_command(label="Export Jpeg...", command=lambda: self._on_edit_export_jpegs(indices))
+        popup_menu.add_separator()
+        popup_menu.add_command(label="Build Previews", command=lambda: self._onkey_b(indices))
+        popup_menu.add_command(label="Properties...", accelerator="P", command= lambda: self._onkey_p(indices))
         
-        # -------------------------
-        # Delete → Toggle Reject
-        # -------------------------
-        if event.keysym in ("Delete", "KP_Delete"):
-            self._onkey_delete()
-            return "break"
 
-        # -------------------------
-        # F5 Refresh
-        # -------------------------
-        if event.keysym == "F5":
-            self._onkey_f5()
-            return "break"
+        menubutton['menu'] = popup_menu
+        popup_menu.tk_popup(x, y)
 
-        # -------------------------
-        # F11 Full Screen
-        # -------------------------
-        if event.keysym == "F11":
-            self._onkey_f11()
-            return "break"
-
-        # -------------------------
-        # 0, 1, 2, 3 → Rating
-        # -------------------------
-        if event.keysym in ("0", "1", "2", "3", "4", "5", "KP_0", "KP_1", "KP_2", "KP_3", "KP_4", "KP_5", "KP_9"):
-            self._onkey_apply_rating(event)
-            return "break"
-
-        # -------------------------
-        # Navigate using Arrow keys, Home, End, Page Up/Down etc
-        # -------------------------
-        if event.keysym in ("Home", "End", "Next", "Prior", "Left", "Right", "Up", "Down", "KP_Up", "KP_Down", "KP_Left", "KP_Right"):
-            self._navigate(ctrl, shift, event)
-            return "break"
-
-        # -------------------------
-        # Build Previews
-        # -------------------------
-        if event.keysym.lower() == "b":
-            self._onkey_b()
-            return "break"
-
-    def _on_resize(self, event: Any):
-        self._redraw()
-
-    def _on_scroll(self, event: Any):
-        is_ctrl = (event.state & 0x0004) != 0
-
-        # ---------------------------------------------------------
-        # Ctrl + Wheel = Thumbnail zoom
-        # ---------------------------------------------------------
-        if is_ctrl:
-            self._on_handle_zoom(event)
-            return "break"
-
-        # ---------------------------------------------------------
-        # If the entire grid fits inside the viewport, there is
-        # nowhere to scroll.
-        # ---------------------------------------------------------
-        viewport_h = self._canvas.winfo_height()
-        max_y = max(0, self._total_height - viewport_h)
-
-        if max_y <= 0:
-            return "break"
-
-        # ---------------------------------------------------------
-        # Determine scroll direction.
-        # ---------------------------------------------------------
-        if event.num == 4:
-            delta = -1
-        elif event.num == 5:
-            delta = 1
-        else:
-            delta = int(-1 * (event.delta / 120))
-
-        if delta == 0:
-            return "break"
-
-        # ---------------------------------------------------------
-        # Scroll normally.
-        # ---------------------------------------------------------
-        self._canvas.yview_scroll(delta, "units")
-
-        # ---------------------------------------------------------
-        # Clamp the resulting viewport position.
-        # ---------------------------------------------------------
-        new_y = self._canvas.canvasy(0)
-        new_y = max(0, min(new_y, max_y))
-
-        self._canvas.yview_moveto(
-            new_y / max(1, self._total_height)
-        )
-
-        self._render_visible()
-
-        return "break"
-
-    def _on_open_preview(self, event: Any | None = None):
-        count = len(self._selected_indices)
-
-        if count == 0:
-            return
-
+    def _stacks(self, indices: list) -> list:
         stacks = []
+        for i in indices:
+            stacks.append(self._items[i])
+        return stacks
 
-        if count == 1:
-            stacks.append(self._items[next(iter(self._selected_indices))])
-
-        elif 2 <= count <= 4:
-            for i in list(self._selected_indices):
-                stacks.append(self._items[i])
-
-        else:
-            # fallback → active image
-            if self._active_index is not None:
-                stacks.append(self._items[self._active_index])
-
-        self._loupe.show(stacks)
-
-    def _on_edit_menu_unfold(self):
-
-        active = self._doc is not None
-        state = "normal" if active else "disabled"
-
-        self._edit_menu.entryconfig(EditMenu.filter.value, state=state)
-        self._edit_menu.entryconfigure(EditMenu.filter.value, 
-            label="Remove Filter" if (self._active_filters & ThumbnailGrid.FILTER_METADATA) else "Apply Filter...")
-
-        active = self._doc is not None and len(self._get_visible_indices()) > 0
-        state = "normal" if active else "disabled"
-
-        self._edit_menu.entryconfig(EditMenu.selectAll.value, state=state)
-        self._edit_menu.entryconfig(EditMenu.rejectSelected.value, state=state)
-
-        state = "normal" if active and self._doc.ready else "disabled"
-        self._edit_menu.entryconfig(EditMenu.cull.value, state=state)
-
-        state = "normal" if active and len(self._get_selected_stacks()) > 0 else "disabled"
-        self._edit_menu.entryconfig(EditMenu.editRaw.value, state=state)
-        self._edit_menu.entryconfig(EditMenu.editJpeg.value, state=state)
-        self._edit_menu.entryconfig(EditMenu.editTags.value, state=state)
-
-    def _on_view_menu_unfold(self):
-        active = self._doc is not None and len(self._get_visible_indices()) > 0
-
-        self._view_menu.entryconfigure(ViewMenu.toggleHideRejected.value, 
-            label="Show Rejected" if (self._active_filters & ThumbnailGrid.FILTER_REJECTED) else "Hide Rejected")
-
-        self._view_menu.entryconfig(ViewMenu.zoomIn.value, 
-            state="normal" if (active and (self._thumb_size < self._max_size)) else "disabled")
-
-        self._view_menu.entryconfig(ViewMenu.zoomOut.value, 
-            state="normal" if (active and (self._thumb_size > self._min_size)) else "disabled")
-
-        self._view_menu.entryconfig(ViewMenu.zoomMax.value, 
-            state="normal" if (active and (self._thumb_size < self._max_size)) else "disabled")
-
-        self._view_menu.entryconfig(ViewMenu.zoomMin.value, 
-            state="normal" if (active and (self._thumb_size > self._min_size)) else "disabled")
-
-        selcount = len(self._selected_indices)
-
-        self._view_menu.entryconfig(ViewMenu.image.value, 
-            state="normal" if (active and selcount > 0) else "disabled")
-
-        self._view_menu.entryconfig(ViewMenu.image.value, 
-            label="Compare" if (active and (selcount > 1) and (selcount <= 4)) else "Image")
-
-    def _on_preview_menu_unfold(self):
-        active = self._doc is not None and self._doc.ready and len(self._items) > 0
-        state = "normal" if active else "disabled"
-        self._preview_menu.entryconfig(PreviewMenu.rebuildAll.value, state=state)
-
-        state = "normal" if active and len(self._get_selected_stacks()) > 0 else "disabled"
-        self._preview_menu.entryconfig(PreviewMenu.build.value, state=state)
-
-# endregion
-
-# region(user_event_handlers)
-
-    def _onkey_f11(self):
-        self._fullscreen = not self._fullscreen
-        self._parent._root.attributes("-fullscreen", self._fullscreen)
-
-    def _onkey_ctrl_f(self):
-        if not (self._active_filters & ThumbnailGrid.FILTER_METADATA):
-            if not FilterDialog(self._parent._root, self._metadata_filters).show():
-                return
-
-        self._toggle_filter(ThumbnailGrid.FILTER_METADATA)
-
-    def _onkey_ctrl_a(self):
-        self._selected_indices = self._visible_indices.copy()
-        self._render_visible()
-
-    def _onkey_ctrl_h(self):
-        self._toggle_filter(ThumbnailGrid.FILTER_REJECTED)
-
-    def _onkey_ctrl_plus(self):
-        self._ctrl_plus_minus(1)
-
-    def _onkey_ctrl_minus(self):
-        self._ctrl_plus_minus(-1)
-
-    def _onkey_shift_ctrl_plus(self):
-        self._zoom_latest_pos = (None, None)
-        self._zoom_latest_direction = 1
-        self._zoom_by(True)
-
-    def _onkey_shift_ctrl_minus(self):
-        self._zoom_latest_pos = (None, None)
-        self._zoom_latest_direction = -1
-        self._zoom_by(True)
-
-    def _onkey_f5(self):
-        if self._doc and self._doc.ready:
-            self.refresh()
-
-    def _onkey_toggle_rating_filter(self, event):
-        self._rating_filter = (
-            int (event.char) 
-            if event.char in ('0', '1', '2', '3', '4', '5', '9') else
-            int(event.keysym)
-        )
-
-        self._active_filters |= ThumbnailGrid.FILTER_RATING
-        self._apply_filters()
-
-        self._redraw()
-        self._canvas.focus_set()
-
-    # document modifications
-
-    def _onkey_apply_rating(self, event):
-        if not self._doc or not self._doc.ready:
-            return
-
-        if event.char in ('0', '1', '2', '3', '4', '5', '9'):
-            nval = int (event.char)
-        else:
-            nval = int(event.keysym)
-
-        stacks = self._get_selected_stacks()
+    def _indices(self, stacks: list) -> list:
+        indices = []
         for stack in stacks:
-            stack.metadata.rating = nval
-
-        self._doc.save()
-        self._redraw()
-        self._loupe._redraw()
-
-    def _onkey_delete(self):
-        if not self._doc or not self._doc.ready:
-            return
-
-        selected = self._get_selected_stacks()
-        for stack in selected:
-            stack.rejected = not stack.rejected
-
-        self._doc.save()
-        self._redraw()
-        self._loupe._redraw()
-
-    # mainwindow delegations
-
-    def _onkey_shift_delete(self):
-        if self._doc and self._doc.ready:
-            self._parent.on_edit_cull()
-
-    def _on_edit_export_raws(self):
-        if self._doc is not None and self._doc.ready:
-            stacks = self._get_selected_stacks()
-            if len(stacks) > 0:
-                self._parent.on_edit_export_raws(stacks)
-
-    def _on_edit_export_jpegs(self):
-        if self._doc is not None and self._doc.ready:
-            stacks = self._get_selected_stacks()
-            if len(stacks) > 0:
-                self._parent.on_edit_export_jpegs(stacks)
-
-    def _onkey_b(self, event=None):
-         if self._doc is not None and self._doc.ready:
-            self._parent.on_preview_rebuild_previews(self._get_selected_stacks())
-
-    def _onkey_ctrl_b(self):
-        if self._doc is not None and self._doc.ready:
-            self._parent.on_preview_rebuild_previews(self._doc.as_list())
-
-    def _on_edit_tags(self):
-        if self._doc is None or not self._doc.ready:
-            return
-
-        stacks = self._get_selected_stacks()
-        if len(stacks) <= 0:
-            return
-
-        cur_tags = []
-        for s in stacks:
-            cur_tags.extend(s.metadata.tags)
-
-        cur_tags = sorted(list(set(cur_tags)))
-        dlg = BatchTagEditDialog(self, cur_tags)
-        if not dlg.show():
-            return
-
-        for s in stacks:
-            existing_tags = s.metadata.tags
-            del_tags = dlg._del_tags
-            new_list = [v for v in existing_tags if v not in del_tags]
-            new_list.extend(dlg._add_tags)
-            s.metadata.tags = new_list
-
-        self._doc.save()
+            indices.append(self._identity_map[stack.identity])
+        return indices
 
 # endregion
 

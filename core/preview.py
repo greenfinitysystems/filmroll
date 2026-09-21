@@ -57,11 +57,20 @@ class PreviewBuilder:
             logwriter.debug(f"PreviewBuilder.export_jpeg() => either metadata or template argument is None")
             return 0
 
-        th = self._load(source)
-        th, size = self._transform(th, template, metadata)
+        source_image = None
+        output_image = None
+        try:
+            source_image = self._load(source)
+            if source_image is None:
+                raise RuntimeError(f"Unable to load image: {source}")
 
-        try: th.save(destination, quality=template.export_quality)
-        finally: th.close()
+            output_image, size = self._transform(source_image, template, metadata)
+            output_image.save(destination, quality=template.export_quality)
+        finally:
+            if output_image is not None:
+                output_image.close()
+            if source_image is not None and source_image is not output_image:
+                source_image.close()
 
         self._copy_metadata(source, destination)
         logwriter.info(f"Jpeg exported => {destination}")
@@ -200,66 +209,6 @@ class PreviewBuilder:
 
         # Write the changes back to the target file
         target_image.writeMetadata()
-
-    def _transform_deprecated(self, img: Image, meta: Any):
-        cfg = Config()
-
-        img = ImageOps.exif_transpose(img)
-
-        img.thumbnail((cfg.preview_size, cfg.preview_size), Image.Resampling.LANCZOS)
-        # img = img.filter(ImageFilter.UnsharpMask(radius=1.2, percent=130, threshold=2))
-        
-        border = int(min(img.size) * cfg.border_ratio)
-        border_bottom = int(cfg.border_ratio * 2.5 * min(img.size))
-
-        img = ImageOps.expand(img, border=(border, border, border, border_bottom), 
-            fill=cfg.border_color)
-
-        film = meta.film if hasattr(meta, "film") else ""
-
-        text_line_1 = (
-            f"{film}, "
-            f"f/{meta.aperture}, "
-            f"{meta.shutter_speed}s, "
-            f"{meta.exposure_compensation} EV, "
-            f"ISO {meta.iso}, "
-            f"{meta.focal_length} mm, "
-        )
-
-        text_line_2 = (
-            f"{meta.make} "
-            f"{meta.model}, "
-            f"{meta.lensmodel}"
-        )
-
-        font_size = int(math.ceil(border_bottom * 14.0/68.3))
-        line1_offset = int(math.ceil(border_bottom * 42.0/68.3))
-        line2_offset = int(math.ceil(border_bottom * 20.0/68.3))
-
-        if font_size in self._font_cache:
-            caption_font = self._font_cache[font_size]
-        else:
-            caption_font = ImageFont.truetype(str(cfg.caption_font), font_size)
-            self._font_cache[font_size] = caption_font
-
-        draw = ImageDraw.Draw(img)
-        bbox = draw.textbbox((0, 0), text_line_1, font=caption_font)
-
-        tw = bbox[2] - bbox[0]
-        th = bbox[3] - bbox[1]
-
-        w, h = img.size
-        draw.text(((w - tw) / 2, h - th - line1_offset), text_line_1, fill=cfg.caption_color, font=caption_font)
-
-        bbox = draw.textbbox((0, 0), text_line_2, font=caption_font)
-
-        tw = bbox[2] - bbox[0]
-        th = bbox[3] - bbox[1]
-
-        w, h = img.size
-        draw.text(((w - tw) / 2, h - th - line2_offset), text_line_2, fill=cfg.caption_color, font=caption_font)
-
-        return img, w*h
 
 # endregion
 

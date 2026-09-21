@@ -9,6 +9,7 @@ from typing import Any
 # region(project_imports)
 
 from core.config import Config
+from core.util import IptcInfo
 
 # endregion
 
@@ -159,9 +160,54 @@ class Metadata:
                 cfg.tagstore.add(tag)
         self._data['tags'] = '|'.join(unique_tags)
 
+    @property
+    def author(self) -> str:
+        return self._data.get('author', '')
+
+    @author.setter
+    def author(self, value: str) -> None:
+        self._data['author'] = value
+
+    @property
+    def copyright(self) -> str:
+        return self._data.get('copyright', '')
+
+    @copyright.setter
+    def copyright(self, value: str) -> None:
+        self._data['copyright'] = value
+
+    @property
+    def caption(self) -> str:
+        return self._data.get('caption', '')
+
+    @caption.setter
+    def caption(self, value: str) -> None:
+        self._data['caption'] = value
+
 # endregion
 
 # region(methods)
+
+    def get_iptcinfo(self) -> IptcInfo:
+        return IptcInfo(
+            author=self.author,
+            copyright=self.copyright,
+            caption = self.caption,
+            comment=self.comment,
+            rating=self.rating,
+            tags=self.tags,
+        )
+
+    def set_iptcinfo(self, value: IptcInfo) -> None:
+        if not isinstance(value, IptcInfo) or value is None:
+            return
+
+        self.author = value.author
+        self.copyright = value.copyright
+        self.caption = value.caption
+        self.comment = value.comment
+        self.rating = value.rating
+        self.tags = value.tags
 
     def get_text(self, full: bool = False):
         lines = [

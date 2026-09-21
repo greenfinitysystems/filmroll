@@ -1,20 +1,19 @@
 # region(python_imports)
 
-import sys
 import logging
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, scrolledtext, colorchooser
-from tkinter.colorchooser import Chooser
 import ttkbootstrap as tb
 from PIL import Image, ImageTk
+from ttkbootstrap import ScrolledText
 
 # endregion
 
 # region(project_imports)
 
 from core.config import Config
-from core.util import JpegExportTemplate, Util
+from core.util import JpegExportTemplate, Util, IptcInfo
 from ui.messagebox import MessageBox
 from ui.multiselectdropdown import MultiSelectDropdown
 from ui.tageditor import TagEditor
@@ -109,7 +108,7 @@ class AboutDialog(Dialog):
     def __init__(self, parent: tk.Tk):
         cfg = Config()
         # super().__init__(parent=parent, width=460, height=380, title=f"About {cfg.appname}")
-        super().__init__(parent=parent, width=460, height=680, title=f"About {cfg.appname}")
+        super().__init__(parent=parent, width=460, height=380, title=f"About {cfg.appname}")
 
     def body(self) -> None:
         frame = tb.Frame(self, padding=(20, 20))
@@ -206,7 +205,7 @@ class FilterDialog(Dialog):
     def __init__(self, parent: tk.Tk, filters: list):
         self._filters = filters
         self._variables = []
-        super().__init__(parent=parent, ok="Apply", height=400, title="Apply Filter")
+        super().__init__(parent=parent, ok="Apply", height=400, title="Search")
 
     def body(self) -> None:
         # our main grid
@@ -268,29 +267,76 @@ class ArchivePropertyDialog(Dialog):
         self._ardesc.set( self._st.get('1.0', 'end-1c'))
         return True
 
-class UserCommentDialog(Dialog):
-    def __init__(self, parent: tk.Tk, comment: str, tags:list = []):
-        self._usernote = tk.StringVar(value=comment)
-        self._tags = tags
-        super().__init__(parent=parent, ok="Save", width=650, height=500, title="Properties")
+class ImageIptcDialog(Dialog):
+    def __init__(self, parent: tk.Tk, iptc: IptcInfo):
+        self._caption = tk.StringVar(value=iptc.caption)
+        self._usernote = tk.StringVar(value=iptc.comment)
+        self._author =  tk.StringVar(value=iptc.author)
+        self._copyright =  tk.StringVar(value=iptc.copyright)
+        self._rating = tk.IntVar(value=iptc.rating)
+        self._tags = iptc.tags
+
+        self._iptcinfo = None
+
+        super().__init__(parent=parent, ok="Save", width=650, height=600, title="Image Properties")
 
     def body(self) -> None:
+        cfg = Config()
+
         # our main grid
         main = tb.Frame(self, padding=(25, 20))
         main.grid(row=0, column=0, sticky="nsew")
         main.columnconfigure(0, weight=1)
+        
+        part1 = tb.Frame(main, padding=(5, 5))
+        part1.grid(row=0, column=0, sticky="ew")
+        part1.columnconfigure(0, weight=0)
+        part1.columnconfigure(1, weight=1)
 
-        label = tb.Label(main, text="Notes" )
-        label.grid(row=0, column=0, sticky="w", padx=5, pady=0)
-        self._st = scrolledtext.ScrolledText(main, width=50, height=10)
-        self._st.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
+        row = 0
 
-        cfg = Config()
-        label = tb.Label(main, text="Tags" )
-        label.grid(row=2, column=0, sticky="w", padx=5, pady=(10,0))
-        self._tageditor = TagEditor(main, values=cfg.tagstore.get(), tags=self._tags, max_height=40)
-        self._tageditor.grid(row=3, column=0, sticky="ew", pady=0)
+        label = tb.Label(part1, text="Caption" )
+        label.grid(row=row, column=0, sticky="w", padx=5, pady=0)
+        tb.Entry(part1, textvariable=self._caption,
+        ).grid(row=row, column=1, sticky="ew", padx=(6,6), pady=(0,6))
 
+        row += 1
+
+        label = tb.Label(part1, text="Author" )
+        label.grid(row=row, column=0, sticky="w", padx=5, pady=0)
+        tb.Entry(part1, textvariable=self._author,
+        ).grid(row=row, column=1, sticky="ew", padx=(6,6), pady=(0,6))
+
+        row += 1
+        
+        label = tb.Label(part1, text="Copyright" )
+        label.grid(row=row, column=0, sticky="w", padx=5, pady=0)
+        tb.Entry(part1, textvariable=self._copyright,
+        ).grid(row=row, column=1, sticky="ew", padx=(6,6), pady=(0,6))
+
+        part2 = tb.Frame(main, padding=(5, 5))
+        part2.grid(row=1, column=0, sticky="ew")
+        part2.columnconfigure(0, weight=1)
+
+        row = 0
+
+        label = tb.Label(part2, text="Comments" )
+        label.grid(row=row, column=0, sticky="w", padx=5, pady=0)
+
+        row += 1
+
+        self._st = ScrolledText(part2, width=50, height=10)
+        self._st.grid(row=row, column=0, sticky="ew", padx=5, pady=5)
+
+        row += 1
+        
+        label = tb.Label(part2, text="Tags" )
+        label.grid(row=row, column=0, sticky="w", padx=5, pady=(10,0))
+
+        row += 1
+
+        self._tageditor = TagEditor(part2, values=cfg.tagstore.get(), tags=self._tags, max_height=40, allowcreate=True)
+        self._tageditor.grid(row=row, column=0, sticky="ew", pady=0)
         self._st.insert('1.0', self._usernote.get())
 
         # the base class body creates the rst of the form with Ok, cancel Buttons
@@ -298,12 +344,20 @@ class UserCommentDialog(Dialog):
         self._st.focus_set()
 
     def validate(self) -> bool:
-        self._usernote.set( self._st.get('1.0', 'end-1c'))
-        self._tags = self._tageditor.get()
+        self._usernote.set(self._st.get('1.0', 'end-1c'))
+        self._iptcinfo = IptcInfo(
+            author = self._author.get(),
+            copyright= self._copyright.get(),
+            caption= self._caption.get(),
+            comment= self._usernote.get(),
+            rating = int(self._rating.get()),
+            tags = self._tageditor.get(),
+        )
+
         return True
 
 class JpegExportDialog(Dialog):
-    def __init__(self, parent: tk.Tk, exclude_paths: list):
+    def __init__(self, parent: tk.Tk, exclude_paths: list, title_suffix: str = None):
         self._excluded_paths = exclude_paths
         self.jpeg_export_template = None
 
@@ -321,8 +375,9 @@ class JpegExportDialog(Dialog):
         self._tk_border_color_ctrl = None
         self._tk_border_exif =  tk.IntVar(value=0)
         self._tk_border_exif_ctrl = None
+        self._tk_inject_iptc = tk.IntVar(value=0)
 
-        super().__init__(parent=parent, ok="Export", width=550, height=370, title="Export Jpeg")
+        super().__init__(parent=parent, ok="Export", width=550, height=370, title=f"Export Jpeg {title_suffix or ''}")
 
     def body(self)->None:
         browse_pad = (6,3)
@@ -405,6 +460,9 @@ class JpegExportDialog(Dialog):
         self._tk_border_exif_ctrl= tb.Checkbutton(main, text="Print Exif Data", variable=self._tk_border_exif,)
         self._tk_border_exif_ctrl.grid(row=4, column=1, sticky="ew", padx=(6,0), pady=(16,6), ipady=2, columnspan=2)
 
+        self._tk_inject_iptc_ctrl= tb.Checkbutton(main, text="Inject IPTC Data", variable=self._tk_inject_iptc, state="disabled",)
+        self._tk_inject_iptc_ctrl.grid(row=5, column=1, sticky="ew", padx=(6,0), pady=(16,6), ipady=2, columnspan=2)
+
         self.border_click()
 
         super().body()
@@ -437,12 +495,16 @@ class JpegExportDialog(Dialog):
         self._tk_border_exif_ctrl.config(state=state)
 
     def validate(self) -> bool:
+        inject_iptc = self._tk_inject_iptc.get()
         jpeg_path = self._tk_jpeg_path.get().strip()
         if jpeg_path == "":
             MessageBox.showerror("Error", "Location cannot be empty", parent=self)
             return False
 
-        jpeg_size = int(self._tk_jpeg_size.get())
+        jpeg_size = (
+            0 if self._tk_jpeg_size.get() == "Original" else 
+            int(self._tk_jpeg_size.get())
+        )
         jpeg_quality = int(self._tk_jpeg_qual.get())
 
         if self._tk_border.get() == 0:
@@ -452,7 +514,8 @@ class JpegExportDialog(Dialog):
                 export_quality = jpeg_quality, 
                 border_size=0, 
                 border_color="", 
-                border_exif = 0
+                border_exif = 0,
+                inject_iptc = inject_iptc,
             )
 
             return True
@@ -471,36 +534,79 @@ class JpegExportDialog(Dialog):
             export_quality = jpeg_quality, 
             border_size=border_size, 
             border_color=border_color, 
-            border_exif = border_exif
+            border_exif = border_exif,
+            inject_iptc= inject_iptc,
         )
 
         return True
 
-class BatchTagEditDialog(Dialog):
-    def __init__(self, parent: tk.Tk, tags: list):
+class BatchIptcEditDialog(Dialog):
+    def __init__(self, parent: tk.Tk, tags: list, title_suffix: str=None):
         self._cur_tags = tags
         self._del_tags = []
         self._add_tags = []
-        super().__init__(parent=parent, ok="Apply", width=450, height=400, title="Apply Tags")
+        self._author = tk.StringVar(value="")
+        self._copyright = tk.StringVar(value="")
+        self._overwrite = tk.IntVar(value=0)
+        super().__init__(parent=parent, ok="Apply", width=600, height=550, title=f"Image Properties {title_suffix or ''}")
 
     def body(self) -> None:
+        cfg = Config()
+
         # our main grid
         main = tb.Frame(self, padding=(25, 20))
         main.grid(row=0, column=0, sticky="nsew")
         main.columnconfigure(0, weight=1)
 
-        cfg = Config()
+        part1 = tb.Frame(main, padding=(5, 5))
+        part1.grid(row=0, column=0, sticky="ew")
+        part1.columnconfigure(0, weight=0)
+        part1.columnconfigure(1, weight=1)
 
-        label = tb.Label(main, text="Remove Tags" )
-        label.grid(row=0, column=0, sticky="w", padx=5, pady=0)
-        self._del_te = TagEditor(main, values=self._cur_tags, tags=[], max_height=40, allowcreate=False)
-        self._del_te.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
+        row = 0
 
+        label = tb.Label(part1, text="Author" )
+        label.grid(row=row, column=0, sticky="w", padx=5, pady=0)
+        tb.Entry(part1, textvariable=self._author,
+        ).grid(row=row, column=1, sticky="ew", padx=(6,6), pady=(0,6))
+
+        row += 1
         
-        label = tb.Label(main, text="Add Tags" )
-        label.grid(row=2, column=0, sticky="w", padx=5, pady=(10,0))
-        self._add_te = TagEditor(main, values=cfg.tagstore.get(), tags=[], max_height=40)
-        self._add_te.grid(row=3, column=0, sticky="ew", padx=5, pady=5)
+        label = tb.Label(part1, text="Copyright" )
+        label.grid(row=row, column=0, sticky="w", padx=5, pady=0)
+        tb.Entry(part1, textvariable=self._copyright,
+        ).grid(row=row, column=1, sticky="ew", padx=(6,6), pady=(0,6))
+
+        row += 1
+
+        tb.Checkbutton(part1, text="Overwrite Existing Values", variable=self._overwrite,
+        ).grid(row=row, column=1, sticky="ew", padx=(6,0), pady=(16,6), ipady=2, columnspan=2)
+
+        # ---
+
+        part2 = tb.Frame(main, padding=(5, 5))
+        part2.grid(row=1, column=0, sticky="ew")
+        part2.columnconfigure(0, weight=1)
+
+        row = 0
+
+        label = tb.Label(part2, text="Remove Tags" )
+        label.grid(row=row, column=0, sticky="w", padx=5, pady=0)
+
+        row += 1
+
+        self._del_te = TagEditor(part2, values=self._cur_tags, tags=[], max_height=60, allowcreate=False)
+        self._del_te.grid(row=row, column=0, sticky="ew", padx=5, pady=5)
+
+        row += 1
+
+        label = tb.Label(part2, text="Add Tags" )
+        label.grid(row=row, column=0, sticky="w", padx=5, pady=(10,0))
+
+        row += 1
+        
+        self._add_te = TagEditor(part2, values=cfg.tagstore.get(), tags=[], max_height=60)
+        self._add_te.grid(row=row, column=0, sticky="ew", padx=5, pady=5)
 
         # the base class body creates the rst of the form with Ok, cancel Buttons
         super().body()
@@ -604,7 +710,7 @@ class ConfigDialog(Dialog):
         cfg.use_focal_groups = self._use_focal_groups.get()
 
         cfg._save()
-        MessageBox.showinfo("Options", "Modified options will only take effect after restart.")
+        MessageBox.showinfo(parent=self, title="Options", message="Modified options will only take effect after restart.")
 
         return True
 

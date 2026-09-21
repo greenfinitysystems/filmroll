@@ -165,6 +165,7 @@ class TagEditor(ttk.Frame):
         self._tags_canvas.pack(
             side="left",
             fill="x",
+            expand=True,
         )
 
         self._tags_scrollbar = ttk.Scrollbar(

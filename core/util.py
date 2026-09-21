@@ -1,6 +1,5 @@
 # region(python_imports)
 
-import logging
 import math
 import re
 from typing import Any, NamedTuple
@@ -16,7 +15,7 @@ from scipy.ndimage import gaussian_filter1d
 
 # region(globals)
 
-logwriter = logging.getLogger(__name__)
+# There is nothing in this section
 
 # endregion
 
@@ -115,6 +114,15 @@ class JpegExportTemplate(NamedTuple):
     border_size: float
     border_color: str
     border_exif: int
+    inject_iptc: int
+
+class IptcInfo(NamedTuple):
+    caption: str=""
+    comment: str=""
+    author: str=""
+    copyright: str=""
+    rating: int=0
+    tags: list=[]
 
 # endregion
 
