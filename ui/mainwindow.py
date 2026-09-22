@@ -5,6 +5,7 @@ import platform
 import sys
 import tkinter as tk
 from enum import Enum
+from typing import Any
 from pathlib import Path
 from tkinter import filedialog
 from tkinter import messagebox as sysmessagebox
@@ -18,13 +19,11 @@ from PIL import Image, ImageDraw, ImageFont, ImageTk
 from core.archive import Archive
 from core.config import Config
 from core.proxy import AsyncProxy
-from ui.dialog import (
-    AboutDialog,
-    ArchivePropertyDialog,
-    JpegExportDialog,
-    RepairArchiveDialog,
-    ConfigDialog
-)
+from ui.aboutdialog import AboutDialog
+from ui.repairarchivedialog import RepairArchiveDialog
+from ui.archivepropertydialog import ArchivePropertyDialog
+from ui.jpegexportdialog import JpegExportDialog
+from ui.configdialog import ConfigDialog
 from ui.messagebox import MessageBox
 from ui.thumbnailgrid import ThumbnailGrid
 
@@ -55,11 +54,8 @@ class FileMenu(Enum):
 # region(globals)
 
 logwriter = logging.getLogger(__name__)
-logwriter.setLevel(Config().logger_log_level)
 
 import traceback
-
-
 def _debug_assert_(condition, message):
     if condition: return True
     # Join the list into a single clean string
@@ -204,7 +200,7 @@ class FilmrollGUI:
             self._proxy = AsyncProxy()
             self._proxy._host = self
             self._proxy.register_event("UPDATE_STATUSBAR", lambda data: self.update_statusbar(*data))
-            self._proxy.register_event("RELOAD_DOCUMENT", lambda data: self.on_file_reload(data))
+            self._proxy.register_event("RELOAD_DOCUMENT", lambda _: self.on_file_reload())
             self._proxy.start()
 
             self._root.title(self._appname)
@@ -228,11 +224,11 @@ class FilmrollGUI:
 # region(splash_screen)
 
     @staticmethod
-    def run():
+    def run() -> None:
         FilmrollGUI._show_splash(FilmrollGUI)
 
     @staticmethod
-    def _show_splash(mainfunc):
+    def _show_splash(mainfunc) -> None:
         try:
             splash = tk.Tk()
             splash.overrideredirect(1)
@@ -270,14 +266,14 @@ class FilmrollGUI:
 # endregion
 
 # region(user_interface)
-    def maximize(self):
+    def maximize(self) -> None:
         current_os = platform.system()
         if current_os == "Windows": self._root.state('zoomed')
         elif current_os == "Linux": self._root.attributes('-zoomed', True)
         elif current_os == "Darwin":  self._root.state('zoomed')
         else: self._root.attributes('-fullscreen', True)
 
-    def update_statusbar(self, status, progress, step=False):
+    def update_statusbar(self, status: str, progress, step: bool=False) -> None:
         if status: 
             self.status.set(status)
             self._root.update_idletasks()
@@ -288,10 +284,10 @@ class FilmrollGUI:
 
         self._root.update_idletasks()
 
-    def reset_statusbar(self):
+    def reset_statusbar(self) -> None:
         self.update_statusbar("Ready", 0)
 
-    def enable_cancel(self, enable=True):
+    def enable_cancel(self, enable: bool=True) -> None:
         if enable:
             self.cancel_button.config(image=self.progress_cancel_img_a)
             self.cancel_button.bind("<Button-1>", self.on_cancel_click)
@@ -301,33 +297,33 @@ class FilmrollGUI:
             self.cancel_button.unbind("<Button-1>")
             self.cancel_button_state = tk.DISABLED
 
-    def report_error(self, message, e=None):
-        logwriter.error(f"{message} => {str(e) if e is not None else 'Unexpected error'}")
-        if e is not None:
-            self.showerror("Error", str(e))
+    def report_error(self, message: str, error: Exception=None) -> None:
+        logwriter.error(f"{message} => {str(error) if error is not None else 'Unexpected error'}")
+        if error is not None:
+            self.showerror("Error", str(error))
 
-    def set_dirty(self):
+    def set_dirty(self) -> None:
         if self.doc is not None:
             self.doc.dirty = True
             self._root.title(self.doc.name + " *")
 
-    def showinfo(self, title, message):
+    def showinfo(self, title: str, message: str) -> None:
         MessageBox.showinfo(title=title, message=message, parent=self._root)
 
-    def showwarning(self, title, message):
+    def showwarning(self, title: str, message: str) -> None:
         MessageBox.showwarning(title=title, message=message, parent=self._root)
 
-    def showerror(self, title, message):
+    def showerror(self, title: str, message: str) -> None:
         MessageBox.showerror(title=title, message=message, parent=self._root)
 
-    def askyesno(self, title, message) -> bool:
+    def askyesno(self, title: str, message: str) -> bool:
         return MessageBox.askyesno(title=title, message=message, parent=self._root)
 
 # endregion
     
 # region(general_events)
 
-    def on_file_menu_unfold(self):
+    def on_file_menu_unfold(self) -> None:
         has_document = self.doc is not None
         not_working = (self._proxy.mp_total_job <= 0)
 
@@ -358,13 +354,13 @@ class FilmrollGUI:
         self.file_menu.entryconfigure(FileMenu.properties.value, 
             state="normal" if has_document and not_working else "disabled")
 
-    def on_cancel_click(self, event):
+    def on_cancel_click(self, _) -> None:
         if self.cancel_button_state == tk.DISABLED:
             return
         self.enable_cancel(False)
         self._proxy.cancel_operation()
 
-    def on_closing(self):
+    def on_closing(self) -> None:
         try:
 
             if self._proxy.running:
@@ -385,7 +381,7 @@ class FilmrollGUI:
             sysmessagebox.showerror("Critical Error", str(e))
             sys.exit()
 
-    def on_key(self, event):
+    def on_key(self, event: Any) -> None:
         ctrl = (event.state & 0x0004) != 0
         #shift = (event.state & 0x0001) != 0
 
@@ -415,7 +411,7 @@ class FilmrollGUI:
 
 # region(private_methods)
 
-    def on_file_reload(self, reload=True):
+    def on_file_reload(self) -> None:
         if not _debug_assert_(( self.doc is not None and self.doc.ready),
             "FilmrollGUI.on_file_reload() - no active archive or archive busy"): return
 
@@ -467,7 +463,7 @@ class FilmrollGUI:
 
 # region(file_menu)
 
-    def on_file_new(self):
+    def on_file_new(self) -> None:
         # get archive name from user. return if calcenled
         dir = filedialog.askdirectory(title="New Archive",
             initialdir=str(Path.home()))
@@ -492,7 +488,7 @@ class FilmrollGUI:
             # clean up the status bar
             self.reset_statusbar()
 
-    def on_file_open(self):
+    def on_file_open(self) -> None:
         # get the file name to open
         arc_path = filedialog.askopenfilename(title="Open Archive", initialdir=Path.home(),
             filetypes=((f"{self._appname} archive", "*.far"), ("All files", "*.*")))
@@ -535,7 +531,7 @@ class FilmrollGUI:
             # clean up the status bar
             self.reset_statusbar()
 
-    def on_file_save(self):
+    def on_file_save(self) -> None:
         if not _debug_assert_(( self.doc is not None and self.doc.ready),
             "FilmrollGUI.on_file_save() - no active archive or archive busy"): return
 
@@ -550,7 +546,7 @@ class FilmrollGUI:
             # clean up the status bar
             self.reset_statusbar()
 
-    def on_file_save_as(self):
+    def on_file_save_as(self) -> None:
         if not _debug_assert_(( self.doc is not None and self.doc.ready),
             "FilmrollGUI.on_file_save_as() - no active archive or archive busy"): return
 
@@ -589,7 +585,7 @@ class FilmrollGUI:
             # clean up the status bar
             self.reset_statusbar()
 
-    def on_file_close(self):
+    def on_file_close(self) -> None:
         # even if this is called without an active document
         # we will not fail on assertion. That is why we are not asserting
         # whether self.doc is not None or not
@@ -613,7 +609,7 @@ class FilmrollGUI:
             # clean up the status bar
             self.reset_statusbar()
 
-    def on_file_repair(self):
+    def on_file_repair(self) -> None:
         if not _debug_assert_(( self.doc is not None and self.doc.ready),
             "FilmrollGUI.on_file_repair() - no active archive or archive busy"): return
         
@@ -624,7 +620,7 @@ class FilmrollGUI:
 
         try:
             # move the current archive
-            self.doc.move(dlg._apath.get(), dlg._delete_missing.get())
+            self.doc.move(dlg._path.get(), dlg._delete_missing.get())
             
             # Ask user to save the newly repaired archive
             self.on_file_save_as()
@@ -637,7 +633,7 @@ class FilmrollGUI:
             # clean up the status bar
             self.reset_statusbar()
 
-    def on_file_import_files(self):
+    def on_file_import_files(self) -> None:
         if not _debug_assert_(( self.doc is not None and self.doc.ready),
             "FilmrollGUI.on_file_import_files() - no active archive or archive busy"): return
 
@@ -664,7 +660,7 @@ class FilmrollGUI:
             # clean up the status bar
             self.reset_statusbar()
 
-    def on_file_import_folder(self):
+    def on_file_import_folder(self) -> None:
         if not _debug_assert_(( self.doc is not None and self.doc.ready),
             "FilmrollGUI.on_file_import_folder() - no active document or archive busy"): return
 
@@ -696,7 +692,7 @@ class FilmrollGUI:
             # clean up the status bar
             self.reset_statusbar()
 
-    def on_file_properties(self):
+    def on_file_properties(self) -> None:
         if not _debug_assert_(( self.doc is not None and self.doc.ready),
             "FilmrollGUI.on_file_properties() - no active archive or archive busy"): return
 
@@ -709,10 +705,10 @@ class FilmrollGUI:
         self.doc.save()
         self._root.title(self.doc.name)
 
-    def on_file_options(self):
+    def on_file_options(self) -> None:
         ConfigDialog(parent=self._root).show()
 
-    def on_file_exit(self):
+    def on_file_exit(self) -> None:
         try:
             self.on_closing()
         except:
@@ -722,7 +718,7 @@ class FilmrollGUI:
 
 # region(edit_menu)
 
-    def on_edit_cull(self):
+    def on_edit_cull(self) -> None:
         if not self.doc:
             return
 
@@ -739,12 +735,12 @@ class FilmrollGUI:
         finally:
             self.reset_statusbar()
 
-    def on_edit_export_raws(self, stacks):
+    def on_edit_export_raws(self, stacks: list, parent: Any= None) -> None:
         if not self.doc: return
         
         # get the folder from user
         dir = filedialog.askdirectory(
-            parent= self._root,
+            parent= parent or self._root,
             title="Export To",
             initialdir = Path().home(),
         )
@@ -767,11 +763,11 @@ class FilmrollGUI:
         finally:
             self.reset_statusbar()
 
-    def on_edit_export_jpegs(self, stacks):
+    def on_edit_export_jpegs(self, stacks: list, parent: Any= None) -> None:
         if not self.doc: return
 
         try:
-            dlg = JpegExportDialog(self._root, self.doc.syspaths, title_suffix=f"[{len(stacks)} Images]")
+            dlg = JpegExportDialog(parent=parent or self._root, exclude_paths=self.doc.syspaths, title_suffix=f"[{len(stacks)} Images]")
             if dlg.show():
                 self.doc.export_jpegs(stacks, dlg.jpeg_export_template)
 
@@ -783,9 +779,9 @@ class FilmrollGUI:
 
 # endregion
 
-# region(preview_menu)
+# region(image_menu)
 
-    def on_preview_rebuild_previews(self, stacks: list = None):
+    def on_preview_rebuild_previews(self, stacks: list = None) -> None:
         if not self.doc: return
         if stacks is None: stacks = self.doc._catalog.values()
 

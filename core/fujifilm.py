@@ -15,7 +15,6 @@ from core.metadata import Metadata
 # region(globals)
 
 logwriter = logging.getLogger(__name__)
-logwriter.setLevel(Config().logger_log_level)
 
 # endregion
 

@@ -15,7 +15,6 @@ from core.file import File, FileType
 # region(globals)
 
 logwriter = logging.getLogger(__name__)
-logwriter.setLevel(Config().logger_log_level)
 
 # endregion
 

@@ -2,6 +2,7 @@
 
 import tkinter as tk
 import ttkbootstrap as ttk
+from typing import Any
 
 # endregion
 
@@ -41,13 +42,13 @@ class TagEditor(ttk.Frame):
 
     def __init__(
         self,
-        parent,
-        values=None,
-        tags=None,
-        command=None,
-        width=40,
-        max_height=100,
-        allowcreate=True,
+        parent: Any,
+        values: list=None,
+        tags: list=None,
+        command: Any=None,
+        width: int=40,
+        max_height: int=100,
+        allowcreate: bool=True,
         **kwargs,
     ):
         super().__init__(parent, **kwargs)
@@ -78,13 +79,11 @@ class TagEditor(ttk.Frame):
 
 # region(methods)
 
-    # Public API
-
-    def get(self):
+    def get(self) -> list:
         """Return the currently selected tags."""
         return list(self._tags)
 
-    def set(self, tags):
+    def set(self, tags: list) -> None:
         """Replace the currently selected tags."""
         seen = set()
         self._tags = []
@@ -99,13 +98,13 @@ class TagEditor(ttk.Frame):
         self._update_tags()
         self._notify()
 
-    def clear(self):
+    def clear(self) -> None:
         """Remove all selected tags."""
         self._tags.clear()
         self._update_tags()
         self._notify()
 
-    def values(self, values=None):
+    def values(self, values: list=None) -> list | None:
         """
         Get or replace the available suggestion tags.
 
@@ -133,7 +132,7 @@ class TagEditor(ttk.Frame):
 
     # Construction
 
-    def _build(self):
+    def _build(self) -> None:
         self._tag_frame = tk.Frame(
             self,
             bg="white",
@@ -264,7 +263,7 @@ class TagEditor(ttk.Frame):
 
     # Tags
 
-    def _update_tags(self):
+    def _update_tags(self) -> None:
         """Schedule the tag pills to be wrapped into rows."""
         if self._wrap_after_id is not None:
             try:
@@ -274,7 +273,7 @@ class TagEditor(ttk.Frame):
 
         self._wrap_after_id = self.after_idle(self._wrap_tags)
 
-    def _tags_frame_configure(self, event=None):
+    def _tags_frame_configure(self, _=None) -> None:
         if self._wrapping:
             return
 
@@ -291,7 +290,7 @@ class TagEditor(ttk.Frame):
 
         self._wrap_after_id = self.after_idle(self._wrap_tags)
 
-    def _tags_canvas_configure(self, event=None):
+    def _tags_canvas_configure(self, _=None) -> None:
         """Keep the wrapped tag frame the same width as the viewport."""
         if self._tags_canvas.winfo_width() <= 1:
             return
@@ -309,7 +308,7 @@ class TagEditor(ttk.Frame):
 
         self._wrap_after_id = self.after_idle(self._wrap_tags)
 
-    def _set_tag_scrollbar(self, visible):
+    def _set_tag_scrollbar(self, visible) -> None:
         """Show or hide the tag-area scrollbar."""
         if visible:
             if not self._tags_scrollbar.winfo_ismapped():
@@ -321,7 +320,7 @@ class TagEditor(ttk.Frame):
             if self._tags_scrollbar.winfo_ismapped():
                 self._tags_scrollbar.pack_forget()
 
-    def _wrap_tags(self):
+    def _wrap_tags(self) -> None:
         """Arrange tag pills into rows and constrain the tag area height."""
         self._wrap_after_id = None
 
@@ -467,10 +466,10 @@ class TagEditor(ttk.Frame):
 
     # Tag-area scrolling
 
-    def _tags_mousewheel(self, event):
+    def _tags_mousewheel(self, event: Any) -> str:
         """Scroll the tag area with the mouse wheel."""
         if self._tags_frame.winfo_reqheight() <= self._max_height:
-            return
+            return "break"
 
         if event.num == 4:
             self._tags_canvas.yview_scroll(-1, "units")
@@ -484,7 +483,7 @@ class TagEditor(ttk.Frame):
 
         return "break"
 
-    def _create_tag(self, parent, tag):
+    def _create_tag(self, parent: Any, tag: str) -> Any:
         """Create one rounded tag pill and return it."""
 
         # Measure the tag text using the same basic Tk font metrics
@@ -602,7 +601,7 @@ class TagEditor(ttk.Frame):
 
         return canvas
 
-    def _remove_tag(self, tag):
+    def _remove_tag(self, tag: str) -> None:
         if tag not in self._tags:
             return
 
@@ -615,7 +614,7 @@ class TagEditor(ttk.Frame):
 
     # Input
 
-    def _entry_changed(self, event=None):
+    def _entry_changed(self, event: Any=None) -> None:
         # Arrow keys navigate the suggestion list.  They do not change the
         # Entry text, so do not rebuild/reset the suggestions on KeyRelease.
         if event is not None and event.keysym in ("Up", "Down"):
@@ -623,7 +622,7 @@ class TagEditor(ttk.Frame):
 
         self._update_suggestions()
 
-    def _return_pressed(self, event=None):
+    def _return_pressed(self, _=None) -> str:
         text = self._normalize(self._entry.get())
 
         if not text:
@@ -638,7 +637,7 @@ class TagEditor(ttk.Frame):
 
         return "break"
 
-    def _add_tag(self, tag):
+    def _add_tag(self, tag: str) -> None:
         tag = self._normalize(tag)
 
         if tag not in self._values and not self._allowcreate:
@@ -656,7 +655,7 @@ class TagEditor(ttk.Frame):
         self._update_suggestions()
         self._entry.focus_set()
 
-    def _update_suggestions(self):
+    def _update_suggestions(self) -> None:
         text = self._normalize(self._entry.get())
 
         if not text:
@@ -676,7 +675,7 @@ class TagEditor(ttk.Frame):
 
         self._open_popup(matches)
 
-    def _open_popup(self, values):
+    def _open_popup(self, values: list) -> None:
         if self._popup is None:
             self._popup = tk.Toplevel(self)
             self._popup.overrideredirect(True)
@@ -754,7 +753,7 @@ class TagEditor(ttk.Frame):
         # selection surface; Up/Down are handled by the Entry bindings.
         self._entry.focus_set()
 
-    def _position_popup(self):
+    def _position_popup(self) -> None:
         if self._popup is None:
             return
 
@@ -773,7 +772,7 @@ class TagEditor(ttk.Frame):
             f"{width}x{height}+{x}+{y}"
         )
 
-    def _close_popup(self):
+    def _close_popup(self) -> None:
         if self._popup is not None:
             try:
                 self._popup.destroy()
@@ -785,7 +784,7 @@ class TagEditor(ttk.Frame):
 
     # Keyboard navigation
 
-    def _down_pressed(self, event=None):
+    def _down_pressed(self, _=None) -> None:
         if self._listbox is None:
             return
 
@@ -806,14 +805,14 @@ class TagEditor(ttk.Frame):
 
         return "break"
 
-    def _up_pressed(self, event=None):
+    def _up_pressed(self, _=None) -> None:
         if self._listbox is None:
             return
 
         size = self._listbox.size()
 
         if not size:
-            return
+            return "break"
 
         current = self._listbox.curselection()
 
@@ -838,7 +837,7 @@ class TagEditor(ttk.Frame):
 
         return self._listbox.get(selection[0])
 
-    def _listbox_return(self, event=None):
+    def _listbox_return(self, _=None) -> str:
         tag = self._get_highlighted_tag()
 
         if tag:
@@ -846,7 +845,7 @@ class TagEditor(ttk.Frame):
 
         return "break"
 
-    def _suggestion_clicked(self, event=None):
+    def _suggestion_clicked(self, event: Any=None) -> str:
         if self._listbox is None:
             return "break"
 
@@ -876,17 +875,17 @@ class TagEditor(ttk.Frame):
 
         return "break"
 
-    def _escape_pressed(self, event=None):
+    def _escape_pressed(self, _=None) -> str:
         self._close_popup()
         self._entry.focus_set()
         return "break"
 
-    def _focus_out(self, event=None):
+    def _focus_out(self, _=None) -> None:
         # Give mouse clicks on the popup a chance to occur
         # before closing it.
         self.after(100, self._check_popup_focus)
 
-    def _check_popup_focus(self):
+    def _check_popup_focus(self) -> None:
         if self._popup is None:
             return
 
@@ -904,13 +903,13 @@ class TagEditor(ttk.Frame):
     # Helpers
 
     @staticmethod
-    def _normalize(value):
+    def _normalize(value: str) -> str:
         if not isinstance(value, str):
             return ""
 
         return value.strip().lower()
 
-    def _notify(self):
+    def _notify(self) -> None:
         if self._command is not None:
             self._command(self.get())
 

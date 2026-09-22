@@ -3,6 +3,7 @@
 import sys
 import tkinter as tk
 import ttkbootstrap as ttk
+from typing import Any
 
 # endregion
 
@@ -81,11 +82,11 @@ class MultiSelectDropdown(ttk.Frame):
 
 # region(methods)
 
-    def get(self):
+    def get(self) -> list:
         """Return the currently selected values as a list."""
         return [value for value in self._values if value in self._selected]
 
-    def set(self, values):
+    def set(self, values: list) -> None:
         """Set the current selection."""
         values = set(values or [])
 
@@ -97,14 +98,14 @@ class MultiSelectDropdown(ttk.Frame):
         self._update_display()
         self._notify()
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear the current selection."""
         self._selected.clear()
         self._update_checkboxes()
         self._update_display()
         self._notify()
 
-    def select_all(self):
+    def select_all(self) -> None:
         """Select all available values."""
         self._selected = set(self._values)
 
@@ -112,7 +113,7 @@ class MultiSelectDropdown(ttk.Frame):
         self._update_display()
         self._notify()
 
-    def values(self, values=None):
+    def values(self, values: list=None) -> list | None:
         """
         Get or replace the available values.
 
@@ -340,7 +341,7 @@ class MultiSelectDropdown(ttk.Frame):
         self.winfo_toplevel().bind_all("<Escape>", self._close_popup, add="+",)
         self._outside_click_binding = self.winfo_toplevel().bind("<Button-1>", self._outside_click, add="+",)
 
-    def _close_popup(self, event=None):
+    def _close_popup(self, _=None):
         if self._outside_click_binding is not None:
             self.winfo_toplevel().unbind("<Button-1>", self._outside_click_binding,)
             self._outside_click_binding = None
@@ -504,7 +505,7 @@ class MultiSelectDropdown(ttk.Frame):
     # Popup focus handling
     # ------------------------------------------------------------------
 
-    def _outside_click(self, event):
+    def _outside_click(self, event: Any) -> None:
         """Close the popup when clicking outside it."""
 
         if self._popup is None:
@@ -523,7 +524,7 @@ class MultiSelectDropdown(ttk.Frame):
         ):
             self._close_popup()
 
-    def _mousewheel(self, event):
+    def _mousewheel(self, event: Any) -> str:
         if event.num == 4:
             # Linux: wheel up
             self._list_canvas.yview_scroll(-1, "units")

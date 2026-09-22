@@ -38,7 +38,6 @@ class FileOps(Enum):
 # region(globals)
 
 logwriter = logging.getLogger(__name__)
-logwriter.setLevel(Config().logger_log_level)
 
 MAX_PREVIEW_SIZE = (2048 * 2048 * 1.21)
 

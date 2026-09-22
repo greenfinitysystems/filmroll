@@ -1,6 +1,7 @@
 # region(python_imports)
 
 import logging
+from typing import Any
 from ttkbootstrap.dialogs import Messagebox, MessageDialog
 
 # endregion
@@ -14,7 +15,6 @@ from core.config import Config
 # region(globals)
 
 logwriter = logging.getLogger(__name__)
-logwriter.setLevel(Config().logger_log_level)
 
 # endregion
 
@@ -23,8 +23,8 @@ class MessageBox:
 # region(static_methods)
 
     @staticmethod
-    def showinfo(title, message, parent=None):
-        return MessageBox._show_dialog(
+    def showinfo(title: str, message: str, parent: Any=None) -> None:
+        MessageBox._show_dialog(
             title=title,
             message=message,
             parent=parent,
@@ -33,8 +33,8 @@ class MessageBox:
         )
 
     @staticmethod
-    def showwarning(title, message, parent=None):
-        return MessageBox._show_dialog(
+    def showwarning(title: str, message: str, parent: Any=None) -> None:
+        MessageBox._show_dialog(
             title=title,
             message=message,
             parent=parent,
@@ -43,8 +43,8 @@ class MessageBox:
         )
 
     @staticmethod
-    def showerror(title, message, parent=None):
-        return MessageBox._show_dialog(
+    def showerror(title: str, message: str, parent: Any=None) -> None:
+        MessageBox._show_dialog(
             title=title,
             message=message,
             parent=parent,
@@ -53,7 +53,7 @@ class MessageBox:
         )
 
     @staticmethod
-    def askyesno(title, message, parent=None):
+    def askyesno(title: str, message: str, parent: Any=None) -> bool:
         result = MessageBox._show_dialog(
             title=title,
             message=message,

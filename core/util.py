@@ -114,6 +114,7 @@ class JpegExportTemplate(NamedTuple):
     border_size: float
     border_color: str
     border_exif: int
+    caption_color: str
     inject_iptc: int
 
 class IptcInfo(NamedTuple):
@@ -122,7 +123,7 @@ class IptcInfo(NamedTuple):
     author: str=""
     copyright: str=""
     rating: int=0
-    tags: list=[]
+    tags: tuple=()
 
 # endregion
 

@@ -12,9 +12,9 @@ import copy
 
 # region(project_imports)
 
-from core.archive import Archive
 from core.config import Config
-from ui.dialog import FilterDialog, BatchIptcEditDialog, ImageIptcDialog
+from ui.iptcdialog import BatchIptcDialog, IptcDialog
+from ui.searchdialog import SearchDialog
 from ui.loupe import Loupe
 
 # endregion
@@ -73,7 +73,7 @@ class ThumbnailGrid(tb.Frame):
 
 # region(class_methods)
 
-    def __init__(self, parent, win):
+    def __init__(self, parent: Any, win: Any):
         super().__init__(parent)
 
         cfg = Config()
@@ -92,18 +92,18 @@ class ThumbnailGrid(tb.Frame):
         self._edit_menu.add_command(label="Export Raw...", command=lambda: self._on_edit_export_raws(list(self._selected_indices)))
         self._edit_menu.add_command(label="Export Jpeg...", command=lambda: self._on_edit_export_jpegs(list(self._selected_indices)))
 
-        self._preview_menu = tb.Menu(self._menubar, tearoff=0, postcommand=self._on_preview_menu_unfold)
-        self._preview_menu.add_command(label="Build Previews", command=lambda: self._onkey_b(list(self._selected_indices)), accelerator="B")
-        self._preview_menu.add_command(label="Rebuild All Previews", command=self._onkey_ctrl_b, accelerator="Ctrl+B")
-        self._preview_menu.add_separator()
-        self._preview_menu.add_command(label="Unmark",      command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 0), accelerator="0")
-        self._preview_menu.add_command(label="Red",    command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 1), accelerator="1")
-        self._preview_menu.add_command(label="Blue",   command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 2), accelerator="2")
-        self._preview_menu.add_command(label="Green",  command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 3), accelerator="3")
-        self._preview_menu.add_command(label="Maroon", command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 4), accelerator="4")
-        self._preview_menu.add_command(label="Orange", command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 5), accelerator="5")
-        self._preview_menu.add_separator()
-        self._preview_menu.add_command(label="Properties...", command=lambda: self._onkey_p(list(self._selected_indices)))
+        self._image_menu = tb.Menu(self._menubar, tearoff=0, postcommand=self._on_preview_menu_unfold)
+        self._image_menu.add_command(label="Build Previews", command=lambda: self._onkey_b(list(self._selected_indices)), accelerator="B")
+        self._image_menu.add_command(label="Rebuild All Previews", command=self._onkey_ctrl_b, accelerator="Ctrl+B")
+        self._image_menu.add_separator()
+        self._image_menu.add_command(label="Unmark",      command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 0), accelerator="0")
+        self._image_menu.add_command(label="Red",    command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 1), accelerator="1")
+        self._image_menu.add_command(label="Blue",   command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 2), accelerator="2")
+        self._image_menu.add_command(label="Green",  command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 3), accelerator="3")
+        self._image_menu.add_command(label="Maroon", command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 4), accelerator="4")
+        self._image_menu.add_command(label="Orange", command=lambda: self._onmenu_apply_rating(list(self._selected_indices), 5), accelerator="5")
+        self._image_menu.add_separator()
+        self._image_menu.add_command(label="Properties...", command=lambda: self._onkey_p(list(self._selected_indices)))
 
         self._view_menu = tb.Menu(self._menubar, tearoff=0, postcommand=self._on_view_menu_unfold)
         self._view_menu.add_command(label="Hide Rejected", command=self._onkey_ctrl_h, accelerator="Ctrl+H")
@@ -150,7 +150,7 @@ class ThumbnailGrid(tb.Frame):
 
 # region(methods)
 
-    def set_doc(self, archive: Archive, redraw=True):
+    def set_doc(self, archive: Any, redraw: bool=True) -> None:
         if archive is None: return
 
         if self._doc: self.unset_doc()
@@ -163,7 +163,7 @@ class ThumbnailGrid(tb.Frame):
             self._identity_map[item.identity] = i
 
         self._menubar.insert_cascade("Help", label="View", menu=self._view_menu)
-        self._menubar.insert_cascade("View", label="Image", menu=self._preview_menu)
+        self._menubar.insert_cascade("View", label="Image", menu=self._image_menu)
         self._menubar.insert_cascade("Image", label="Edit", menu=self._edit_menu)
 
         ds = f"PRE {self._total_items} DOC {self._doc.file_count}"
@@ -176,9 +176,9 @@ class ThumbnailGrid(tb.Frame):
         self._redraw()
         self._canvas.focus_set()
 
-        return True
+        return
 
-    def unset_doc(self):
+    def unset_doc(self) -> None:
         try:
             self._menubar.delete('Edit')
             self._menubar.delete('Image')
@@ -211,14 +211,14 @@ class ThumbnailGrid(tb.Frame):
 
 # region(event_handlers)
 
-    def _on_mouse_down(self, event: Any):
+    def _on_mouse_down(self, event: Any) -> None:
         self._canvas.focus_set()
 
         self._dragging = False
         self._start_x = self._canvas.canvasx(event.x)
         self._start_y = self._canvas.canvasy(event.y)
 
-    def _on_mouse_drag(self, event: Any):
+    def _on_mouse_drag(self, event: Any) -> None:
         x2 = self._canvas.canvasx(event.x)
         y2 = self._canvas.canvasy(event.y)
 
@@ -255,7 +255,7 @@ class ThumbnailGrid(tb.Frame):
                 ctrl
             )
 
-    def _on_mouse_up(self, event: Any):
+    def _on_mouse_up(self, event: Any) -> None:
         if not self._dragging:
             self._on_handle_click(event)
 
@@ -263,7 +263,7 @@ class ThumbnailGrid(tb.Frame):
             self._canvas.delete(self._marquee_rect)
             self._marquee_rect = None
 
-    def _on_key(self, event: Any):
+    def _on_key(self, event: Any) -> str | None:
         if self._total_items == 0:
             return
 
@@ -421,10 +421,10 @@ class ThumbnailGrid(tb.Frame):
             self._onkey_b(list(self._selected_indices))
             return "break"
 
-    def _on_resize(self, event: Any):
+    def _on_resize(self, _: Any) -> None:
         self._redraw()
 
-    def _on_scroll(self, event: Any):
+    def _on_scroll(self, event: Any) -> str | None:
         is_ctrl = (event.state & 0x0004) != 0
 
         # ---------------------------------------------------------
@@ -476,7 +476,7 @@ class ThumbnailGrid(tb.Frame):
 
         return "break"
 
-    def _on_open_preview(self, event: Any | None = None):
+    def _on_open_preview(self, _: Any | None = None) -> None:
         count = len(self._selected_indices)
 
         if count == 0:
@@ -498,7 +498,7 @@ class ThumbnailGrid(tb.Frame):
 
         self._loupe.show(stacks)
 
-    def _on_edit_menu_unfold(self):
+    def _on_edit_menu_unfold(self) -> None:
 
         active = self._doc is not None and self._doc.ready
         state = "normal" if active else "disabled"
@@ -518,7 +518,7 @@ class ThumbnailGrid(tb.Frame):
         self._edit_menu.entryconfig(EditMenu.editRaw.value, state=state)
         self._edit_menu.entryconfig(EditMenu.editJpeg.value, state=state)
 
-    def _on_view_menu_unfold(self):
+    def _on_view_menu_unfold(self) -> None:
         active = self._doc is not None and len(self._get_visible_indices()) > 0
 
         self._view_menu.entryconfigure(ViewMenu.toggleHideRejected.value, 
@@ -544,66 +544,66 @@ class ThumbnailGrid(tb.Frame):
         self._view_menu.entryconfig(ViewMenu.image.value, 
             label="Compare" if (active and (selcount > 1) and (selcount <= 4)) else "Image")
 
-    def _on_preview_menu_unfold(self):
+    def _on_preview_menu_unfold(self) -> None:
         active = self._doc is not None and self._doc.ready and len(self._items) > 0
         state = "normal" if active else "disabled"
-        self._preview_menu.entryconfig(ImageMenu.rebuildAll.value, state=state)
+        self._image_menu.entryconfig(ImageMenu.rebuildAll.value, state=state)
 
         state = "normal" if active and len(self._get_selected_stacks()) > 0 else "disabled"
-        self._preview_menu.entryconfig(ImageMenu.build.value, state=state)
+        self._image_menu.entryconfig(ImageMenu.build.value, state=state)
 
-        self._preview_menu.entryconfig(ImageMenu.rate0.value, state=state)
-        self._preview_menu.entryconfig(ImageMenu.rate1.value, state=state)
-        self._preview_menu.entryconfig(ImageMenu.rate2.value, state=state)
-        self._preview_menu.entryconfig(ImageMenu.rate3.value, state=state)
-        self._preview_menu.entryconfig(ImageMenu.rate4.value, state=state)
-        self._preview_menu.entryconfig(ImageMenu.rate5.value, state=state)
+        self._image_menu.entryconfig(ImageMenu.rate0.value, state=state)
+        self._image_menu.entryconfig(ImageMenu.rate1.value, state=state)
+        self._image_menu.entryconfig(ImageMenu.rate2.value, state=state)
+        self._image_menu.entryconfig(ImageMenu.rate3.value, state=state)
+        self._image_menu.entryconfig(ImageMenu.rate4.value, state=state)
+        self._image_menu.entryconfig(ImageMenu.rate5.value, state=state)
 
-        self._preview_menu.entryconfig(ImageMenu.editIptc.value, state=state)
+        self._image_menu.entryconfig(ImageMenu.editIptc.value, state=state)
 
 # endregion
 
 # region(user_events)
 
-    def _onkey_f11(self):
+    def _onkey_f11(self) -> None:
         self._fullscreen = not self._fullscreen
         self._parent._root.attributes("-fullscreen", self._fullscreen)
 
-    def _onkey_ctrl_f(self):
+    def _onkey_ctrl_f(self) -> None:
         if not (self._active_filters & ThumbnailGrid.FILTER_METADATA):
-            if not FilterDialog(self._parent._root, self._metadata_filters).show():
+            if not SearchDialog(self._parent._root, self._metadata_filters).show():
                 return
 
         self._toggle_filter(ThumbnailGrid.FILTER_METADATA)
 
-    def _onkey_ctrl_a(self):
+    def _onkey_ctrl_a(self) -> None:
         self._selected_indices = self._visible_indices.copy()
         self._render_visible()
 
-    def _onkey_ctrl_h(self):
+    def _onkey_ctrl_h(self) -> None:
         self._toggle_filter(ThumbnailGrid.FILTER_REJECTED)
 
-    def _onkey_ctrl_plus(self):
+    def _onkey_ctrl_plus(self) -> None:
         self._ctrl_plus_minus(1)
 
-    def _onkey_ctrl_minus(self):
+    def _onkey_ctrl_minus(self) -> None:
         self._ctrl_plus_minus(-1)
 
-    def _onkey_shift_ctrl_plus(self):
+    def _onkey_shift_ctrl_plus(self) -> None:
         self._zoom_latest_pos = (None, None)
         self._zoom_latest_direction = 1
         self._zoom_by(True)
 
-    def _onkey_shift_ctrl_minus(self):
+    def _onkey_shift_ctrl_minus(self) -> None:
         self._zoom_latest_pos = (None, None)
         self._zoom_latest_direction = -1
         self._zoom_by(True)
 
-    def _onkey_f5(self):
+    def _onkey_f5(self) -> None:
         if self._doc and self._doc.ready:
             self.refresh()
 
-    def _onkey_toggle_rating_filter(self, event):
+    def _onkey_toggle_rating_filter(self, event: Any) -> None:
         self._rating_filter = (
             int (event.char) 
             if event.char in ('0', '1', '2', '3', '4', '5', '9') else
@@ -618,7 +618,7 @@ class ThumbnailGrid(tb.Frame):
 
     # ------
 
-    def _onkey_ctrl_c(self, indices: list) -> Any:
+    def _onkey_ctrl_c(self, indices: list) -> None:
         text_lines = []
         stacks = self._stacks(indices)
         for stack in stacks:
@@ -626,7 +626,7 @@ class ThumbnailGrid(tb.Frame):
 
         pyperclip.copy("\n--\n".join(text_lines))
 
-    def _onmenu_apply_rating(self, indices: list, rating: int) -> int:
+    def _onmenu_apply_rating(self, indices: list, rating: int) -> None:
         stacks = self._stacks(indices)
         for stack in stacks:
             stack.metadata.rating = rating
@@ -647,27 +647,34 @@ class ThumbnailGrid(tb.Frame):
         self._redraw()
         self._loupe._redraw()
 
-    def _on_edit_export_raws(self, indices: list) -> None:
+    def _on_edit_export_raws(self, indices: list, parent: Any=None) -> None:
         if self._doc is not None and self._doc.ready:
             stacks = self._stacks(indices)
             if len(stacks) > 0:
-                self._parent.on_edit_export_raws(stacks)
+                self._parent.on_edit_export_raws(stacks=stacks, parent=parent or self)
 
-    def _on_edit_export_jpegs(self, indices: list) -> None:
+    def _on_edit_export_jpegs(self, indices: list, parent: Any=None) -> None:
         if self._doc is not None and self._doc.ready:
             stacks = self._stacks(indices)
             if len(stacks) > 0:
-                self._parent.on_edit_export_jpegs(stacks)
+                self._parent.on_edit_export_jpegs(stacks=stacks, parent=parent or self)
 
     def _onkey_b(self, indices:list) -> None:
         if self._doc is not None and self._doc.ready:
             self._parent.on_preview_rebuild_previews(self._stacks(indices))
 
-    def _onkey_p(self, indices: list) -> None:
+    def _onkey_p(self, indices: list, parent: Any=None) -> None:
         if len(indices) == 1:
-            dlg = ImageIptcDialog(self._parent._root, self._items[indices[0]].metadata.get_iptcinfo())
-            if not dlg.show(): return
-            self._items[indices[0]].metadata.set_iptcinfo(dlg._iptcinfo)
+            metadata = self._items[indices[0]].metadata
+            dlg = IptcDialog(
+                parent=parent or self._parent._root, 
+                iptc=metadata.get_iptcinfo()
+            )
+
+            if not dlg.show():
+                return
+
+            metadata.set_iptcinfo(dlg._iptcinfo)
 
         elif len(indices) > 1:
             stacks = self._stacks(indices)
@@ -677,29 +684,36 @@ class ThumbnailGrid(tb.Frame):
                 cur_tags.extend(s.metadata.tags)
     
             cur_tags = sorted(list(set(cur_tags)))
-            dlg = BatchIptcEditDialog(self, cur_tags, f"[{len(indices)} Images]")
+            dlg = BatchIptcDialog(
+                parent=parent or self._parent._root, 
+                tags=cur_tags, 
+                title_suffix=f"[{len(indices)} Images]"
+            )
+
             if not dlg.show():
                 return
     
             for s in stacks:
                 existing_tags = s.metadata.tags
-                del_tags = dlg._del_tags
+                del_tags = dlg._del_te.get()
                 new_list = [v for v in existing_tags if v not in del_tags]
-                new_list.extend(dlg._add_tags)
+                new_list.extend(dlg._add_te.get())
                 s.metadata.tags = new_list
 
-                if (s.metadata.author and dlg._overwrite.get() == 1) or not s.metadata.author:
+                if ((s.metadata.author and dlg._overwrite.get() == 1) or 
+                    not s.metadata.author
+                ):
                     s.metadata.author = dlg._author.get()
 
-                if (s.metadata.copyright and dlg._overwrite.get() == 1) or not s.metadata.copyright:
+                if ((s.metadata.copyright and dlg._overwrite.get() == 1) or 
+                    not s.metadata.copyright
+                ):
                     s.metadata.copyright = dlg._copyright.get()
 
         else:
             pass
     
         self._doc.save()
-
-    # ------
 
     def _onkey_shift_delete(self) -> None:
         if self._doc and self._doc.ready:
@@ -713,7 +727,7 @@ class ThumbnailGrid(tb.Frame):
 
 # region(private_methods)
 
-    def _reset(self):
+    def _reset(self) -> None:
         # Data
         self._doc = None
         self._total_items = 0
@@ -777,11 +791,11 @@ class ThumbnailGrid(tb.Frame):
 
         self._redraw()
 
-    def _redraw(self):
+    def _redraw(self) -> None:
         self._recalculate_layout()
         self._render_visible()
 
-    def _recalculate_layout(self):
+    def _recalculate_layout(self) -> None:
         width = self._canvas.winfo_width()
 
         self._columns = max(1, width // (self._thumb_size + PADDING))
@@ -800,7 +814,7 @@ class ThumbnailGrid(tb.Frame):
 
         self._canvas.config(scrollregion=(0, 0, width, self._total_height))
 
-    def _render_visible(self):
+    def _render_visible(self) -> None:
         def _draw_rejected(x, y):
             # Layer 1: heavy dark fade
             self._canvas.create_rectangle(
@@ -919,7 +933,7 @@ class ThumbnailGrid(tb.Frame):
                 if self._items[index].rejected:
                     _draw_rejected(x, y)
 
-    def _ensure_visible(self, index: int):
+    def _ensure_visible(self, index: int) -> bool:
         if self._total_items == 0:
             return False
 
@@ -952,7 +966,7 @@ class ThumbnailGrid(tb.Frame):
 
         return True
 
-    def _load_image(self, index: int):
+    def _load_image(self, index: int) -> ImageTk.PhotoImage:
         key = (index, self._thumb_size)
         if key in self._image_cache:
             return self._image_cache[key]
@@ -964,7 +978,7 @@ class ThumbnailGrid(tb.Frame):
 
         return self._image_cache[key]
 
-    def _select_range(self, start: int, end: int):
+    def _select_range(self, start: int, end: int) -> None:
         if start > end:
             start, end = end, start
 
@@ -974,9 +988,7 @@ class ThumbnailGrid(tb.Frame):
                 sel_set.add(i)
         self._selected_indices = sel_set
 
-        # self._selected_indices = set(range(start, end + 1))
-
-    def _update_marquee_selection(self, left: int, top: int, right: int, bottom: int, ctrl):
+    def _update_marquee_selection(self, left: int, top: int, right: int, bottom: int, ctrl) -> None:
         new_selection = set()
 
         cell = self._cell
@@ -1017,7 +1029,7 @@ class ThumbnailGrid(tb.Frame):
             self._selected_indices = new_selection
         self._render_visible()
 
-    def _on_handle_click(self, event: Any):
+    def _on_handle_click(self, event: Any) -> None:
         index = self._get_clicked_index(event)
         if index < 0:
             return
@@ -1040,12 +1052,12 @@ class ThumbnailGrid(tb.Frame):
         self._active_index = index
         self._render_visible()
 
-    def _on_handle_rclick(self, event: Any):
+    def _on_handle_rclick(self, event: Any) -> None:
         index = self._get_clicked_index(event)
         if index >= 0:
             self._show_popup_menu(event.x_root, event.y_root, index)
 
-    def _navigate(self, ctrl, shift, event):
+    def _navigate(self, ctrl: bool, shift: bool, event: Any) -> None:
         # -------------------------
         # Ctrl + Home / End
         # -------------------------
@@ -1146,7 +1158,7 @@ class ThumbnailGrid(tb.Frame):
             # still need to update selection highlight
             self._render_visible()
 
-    def _on_handle_zoom(self, event: Any):
+    def _on_handle_zoom(self, event: Any) -> None:
         canvas_x = self._canvas.canvasx(event.x)
         canvas_y = self._canvas.canvasy(event.y)
 
@@ -1160,9 +1172,7 @@ class ThumbnailGrid(tb.Frame):
         self._zoom_redraw_pending = True
         self.after(16, self._zoom_by, False)
 
-        return "break"
-
-    def _zoom_by(self, alltheway=False):
+    def _zoom_by(self, alltheway: bool=False) -> None:
         self._zoom_redraw_pending = False
 
         if self._zoom_latest_pos is None:
@@ -1387,7 +1397,7 @@ class ThumbnailGrid(tb.Frame):
             self._zoom_redraw_pending = True
             self.after(16, self._zoom_by, False)
 
-    def _get_zoom_anchor(self):
+    def _get_zoom_anchor(self) -> tuple:
         """
         Return (index, canvas_x, canvas_y) for the best thumbnail to use
         as the zoom anchor.
@@ -1447,7 +1457,7 @@ class ThumbnailGrid(tb.Frame):
 
         return best_index, best_x, best_y
 
-    def _ctrl_plus_minus(self, direction):
+    def _ctrl_plus_minus(self, direction: int) -> None:
         self._zoom_latest_pos = (None, None)
         self._zoom_latest_direction = direction
 
@@ -1457,28 +1467,28 @@ class ThumbnailGrid(tb.Frame):
         self._zoom_redraw_pending = True
         self.after(16, self._zoom_by, False)
 
-    def _get_visible_indices(self):
+    def _get_visible_indices(self) -> list:
         return [
             i for i in range(self._total_items) 
             if i not in self._filtered_indices
         ]
 
-    def _get_rejected_indices(self):
+    def _get_rejected_indices(self) -> list:
         return [self._identity_map[stack.identity] for stack in self._items if stack.rejected]
 
-    def _get_selected_stacks(self):
+    def _get_selected_stacks(self) -> list:
         return [self._items[i] for i in list(self._selected_indices)]
 
-    def _get_active_stack(self):
+    def _get_active_stack(self) -> Any:
         return self._items[self._active_index]
 
-    def _evaluate_rejected_filter(self, item):
+    def _evaluate_rejected_filter(self, item: Any) -> bool:
             return not item.rejected
     
-    def _evaluate_rating_filter(self, item):
+    def _evaluate_rating_filter(self, item: Any) -> bool:
         return (self._rating_filter == 9) or (item.metadata.rating == self._rating_filter)
 
-    def _evaluate_metadata_filter(self, item):
+    def _evaluate_metadata_filter(self, item) -> bool:
         for f in self._metadata_filters:
             if len(f.selected_values) > 0:
                 value = getattr(item.metadata, f.property)
@@ -1489,7 +1499,7 @@ class ThumbnailGrid(tb.Frame):
                         return False
         return True
 
-    def _apply_filters(self):
+    def _apply_filters(self) -> None:
         self._filtered_indices.clear()
 
         for i in range(self._total_items):
@@ -1508,8 +1518,7 @@ class ThumbnailGrid(tb.Frame):
                     self._filtered_indices.add(i)
                     continue
 
-    def _copy_metadata_filters(self, filters):
-        has_filter = False
+    def _copy_metadata_filters(self, filters: list) -> None:
         for given_filter in filters:
             for i, my_filter in enumerate(self._metadata_filters):
                 if my_filter.property == given_filter.property:
@@ -1518,10 +1527,8 @@ class ThumbnailGrid(tb.Frame):
                     if len(matching_values) > 0:
                         self._metadata_filters[i].selected_values.clear()
                         self._metadata_filters[i].selected_values.extend(matching_values)
-                        has_filter = True
-        return has_filter
 
-    def _toggle_filter(self, filter):
+    def _toggle_filter(self, filter: Any) -> None:
         if self._active_filters & filter: self._active_filters &= ~filter
         else: self._active_filters |= filter
         self._apply_filters()

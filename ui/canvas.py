@@ -1,6 +1,7 @@
 # region(python_imports)
 
 import logging
+from typing import Any
 import math
 import tkinter.font as tkfont
 from enum import Enum
@@ -19,7 +20,6 @@ from core.util import Rectangle, Util
 # region(globals)
 
 logwriter = logging.getLogger(__name__)
-logwriter.setLevel(Config().logger_log_level)
 
 # endregion
 
@@ -36,7 +36,7 @@ class Canvas(tb.Canvas):
 
 # region(class_methods)
 
-    def __init__(self, parent, i):
+    def __init__(self, parent: Any, i: int):
         super().__init__(parent._root)
         self._parent = parent
         self._nopreview = Config().asset("thumb.jpg")
@@ -62,7 +62,7 @@ class Canvas(tb.Canvas):
 
 # region(methods)
 
-    def reload(self):
+    def reload(self) -> None:
         self._reset_image_data()
 
         self._stack = self._parent._stacks[self._pos]
@@ -76,7 +76,7 @@ class Canvas(tb.Canvas):
 
 # region(event_handlers)
 
-    def _redraw(self, event=None): 
+    def _redraw(self, event=None) -> None: 
         # source type
         def _step_10():
             if self._display_mode == DisplayMode.jpeg: text = "JPG"
@@ -315,11 +315,11 @@ class Canvas(tb.Canvas):
         except Exception as e:
             logwriter.debug(f"Canvas._redraw() - Failed to redraw canvas {e}")
 
-    def _on_mouse_lbutton_press(self, event):
+    def _on_mouse_lbutton_press(self, event) -> None:
         self._parent._active_local = self._pos
         self._parent._redraw()
 
-    def _on_mouse_move(self, event):
+    def _on_mouse_move(self, event) -> None:
         ctrl = (event.state & 0x0004) != 0
         drag = bool(event.state & 0x0100)
 
@@ -346,7 +346,7 @@ class Canvas(tb.Canvas):
 
         return "break"
 
-    def _on_mouse_lbutton_release(self, event):
+    def _on_mouse_lbutton_release(self, event) -> None:
         if self._drag_start is None:
             return "break"
 
@@ -360,14 +360,14 @@ class Canvas(tb.Canvas):
 
         return "break"
 
-    def _on_mouse_rbutton_click(self, event):
+    def _on_mouse_rbutton_click(self, event) -> None:
         self._parent._active_local = self._pos
         self._parent._redraw()
         self._parent._show_popup_menu(event.x_root, event.y_root)
 
         return "break"
 
-    def _on_mouse_scroll(self, event):
+    def _on_mouse_scroll(self, event) -> None:
         ctrl = (event.state & 0x0004) != 0
         if self._display_mode == DisplayMode.preview or not ctrl:
             return "break"
@@ -380,7 +380,7 @@ class Canvas(tb.Canvas):
             return "break"
 
         self._zoom_redraw_pending = True
-        self._zoom_thread = self.after(16, self._process_zoom, direction, event.x, event.y)
+        self._zoom_thread = self.after(16, self._process_zoom)
 
         return "break"
 
@@ -388,14 +388,14 @@ class Canvas(tb.Canvas):
 
 # region(private_methods)
 
-    def _reset(self):
+    def _reset(self) -> None:
         self._pos = -1
         self._display_mode = DisplayMode.preview
         self._stack = None
         self._rect = None
         self._reset_image_data()
 
-    def _reset_image_data(self):
+    def _reset_image_data(self) -> None:
         self._histogram = None
         
         if hasattr(self, "_image") and self._image is not None:
@@ -426,10 +426,10 @@ class Canvas(tb.Canvas):
         self._pan_redraw_pending = False
         self._pan_latest_pos = None
 
-    def _pan_start(self, event):
+    def _pan_start(self, event) -> None:
         self._drag_start = (event.x, event.y)
 
-    def _pan_move(self, event):
+    def _pan_move(self, event) -> None:
         self._pan_latest_pos = (event.x, event.y)
         if self._pan_redraw_pending:
             return
@@ -437,12 +437,12 @@ class Canvas(tb.Canvas):
         self._pan_redraw_pending = True
         self._pan_thread = self.after(16, self._process_pan)
 
-    def _pan_end(self):
+    def _pan_end(self) -> None:
         self._sync_drag = False
         self._drag_start = None
         self._redraw()
 
-    def _clip(self):
+    def _clip(self) -> Image:
         img_copy = self._image.copy()
 
         img_w, img_h = self._image.size
@@ -527,7 +527,7 @@ class Canvas(tb.Canvas):
 
         return img_copy
 
-    def _calc_fit_zoom(self):
+    def _calc_fit_zoom(self) -> tuple:
         img_w, img_h = self._image.size
         canvas_w = self.winfo_width()
         canvas_h = self.winfo_height()
@@ -537,7 +537,7 @@ class Canvas(tb.Canvas):
 
         return min( canvas_w / img_w, canvas_h / img_h)
 
-    def _process_pan(self):
+    def _process_pan(self) -> None:
         self._pan_redraw_pending = False
         self._pan_thread = None
 
@@ -584,7 +584,7 @@ class Canvas(tb.Canvas):
             self._pan_redraw_pending = True
             self._pan_thread = self.after(16, self._process_pan)
 
-    def _process_zoom(self, direction, mouse_x, mouse_y):
+    def _process_zoom(self) -> None:
         self._zoom_redraw_pending = False
         self._zoom_thread = None
 
@@ -634,7 +634,7 @@ class Canvas(tb.Canvas):
             self._zoom_redraw_pending = True
             self._zoom_thread = self.after(16, self._process_zoom)
 
-    def _get_histogram(self):
+    def _get_histogram(self)-> ImageTk.PhotoImage:
         def _generate(histogram, size, img):
             hscale = size[0] / 255
             color = ("red", "green", "blue", "white")
@@ -682,7 +682,7 @@ class Canvas(tb.Canvas):
     
         return self._thumbnailgrid()._histogram_cache[key]
 
-    def _thumbnailgrid(self):
+    def _thumbnailgrid(self) -> Any:
         return self._parent._parent
 
 # endregion

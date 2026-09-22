@@ -1,6 +1,7 @@
 # region(python_imports)
 
 import logging
+from typing import Any
 import ttkbootstrap as tb
 
 # endregion
@@ -15,7 +16,6 @@ from ui.canvas import Canvas, DisplayMode
 # region(globals)
 
 logwriter = logging.getLogger(__name__)
-logwriter.setLevel(Config().logger_log_level)
 
 # endregion
 
@@ -23,7 +23,7 @@ class Loupe:
 
 # region(class_methods)
 
-    def __init__(self, parent):
+    def __init__(self, parent: Any):
         self._parent = parent
         self._reset()
 
@@ -31,7 +31,7 @@ class Loupe:
 
 # region(methods)
 
-    def show(self, stacks):
+    def show(self, stacks: list) -> Any:
         assert len(stacks) > 0, "No valid stack. Loupe cannot open"
 
         cfg = Config()
@@ -79,7 +79,7 @@ class Loupe:
 
 # region(event_handlers)
 
-    def _redraw(self, event=None):
+    def _redraw(self, _=None) -> None:
         try:
             if self._root is None: 
                 return
@@ -91,13 +91,13 @@ class Loupe:
         except Exception as e:
             logwriter.error(f"Exception occured in Loupe._redraw: {str(e)}")
 
-    def _on_window_closing(self):
+    def _on_window_closing(self) -> None:
         if self._canvases is not None:
             for c in self._canvases:
                 c._reset()
         self._reset()
 
-    def _on_key(self, event):
+    def _on_key(self, event: Any) -> str:
         if self._root is None: return
         ctrl = (event.state & 0x0004) != 0
         #shift = (event.state & 0x0001) != 0
@@ -107,42 +107,42 @@ class Loupe:
         # -------------------------
         if ctrl and event.keysym == "c":
             self._onkey_ctrl_c()
-            return
+            return "break"
 
         # -------------------------
         # Delete → toggle reject
         # -------------------------
         if event.keysym in ("Delete", "KP_Delete"):
             self._onkey_delete()
-            return
+            return "break"
 
         # -------------------------
         # Navigation
         # -------------------------
         if event.keysym in ("Left", "Right", "Up", "Down", "KP_Left", "KP_Right", "KP_Up", "KP_Down"):
             self._onkey_arrow(event)
-            return
+            return "break"
 
         # -------------------------
         # Escape
         # -------------------------
         if event.keysym == "Escape":
             self._onkey_esc(event)
-            return
+            return "break"
 
         # -------------------------
         # n → Toggle notes
         # -------------------------
         if event.keysym == "p":
             self._onkey_p()
-            return
+            return "break"
 
         # -------------------------
         # m → Toggle metadata
         # -------------------------
         if event.keysym == "m":
             self._onkey_m()
-            return
+            return "break"
 
         # -------------------------
         # h → Toggle histogram
@@ -156,7 +156,7 @@ class Loupe:
         # -------------------------
         if event.keysym == "j":
             self._onkey_j()
-            return
+            return "break"
 
         # -------------------------
         # 0, 1, 2, 3 → Rating
@@ -175,10 +175,10 @@ class Loupe:
 
 # region(user_events)
 
-    def _onkey_esc(self, event):
+    def _onkey_esc(self, _: Any) -> None:
         self._reset()
 
-    def _onkey_arrow(self, event):
+    def _onkey_arrow(self, event: Any) -> None:
         def _navigate_global():
             if ( event.keysym not in ("Left", "Right", "KP_Left", "KP_Right") or 
                 len(self._parent._get_visible_indices()) <= 0
@@ -212,15 +212,15 @@ class Loupe:
         else: _navigate_local()
         self._redraw()
 
-    def _onkey_m(self):
+    def _onkey_m(self) -> None:
         self._show_metadata = not self._show_metadata
         self._redraw()
 
-    def _onkey_h(self):
+    def _onkey_h(self) -> None:
         self._show_histogram = not self._show_histogram
         self._redraw()
 
-    def _onkey_j(self):
+    def _onkey_j(self) -> None:
         if self._display_mode == DisplayMode.preview:
             self._display_mode = DisplayMode.jpeg
         elif self._display_mode == DisplayMode.jpeg:
@@ -233,31 +233,29 @@ class Loupe:
 
         self._redraw()
 
-    # --
+    def _onkey_p(self) -> None:
+        self._parent._onkey_p(indices=self._parent._indices([self._current_stack(),]), parent=self._root)
 
-    def _onkey_p(self):
-        self._parent._onkey_p(self._parent._indices([self._current_stack(),]))
-
-    def _onkey_delete(self):
+    def _onkey_delete(self) -> None:
         self._parent._onkey_delete(self._parent._indices([self._current_stack(),]))
 
-    def _onkey_ctrl_c(self):
+    def _onkey_ctrl_c(self) -> None:
         self._parent._onkey_ctrl_c(self._parent._indices([self._current_stack(),]))
 
-    def _onmenu_apply_rating(self, number):
+    def _onmenu_apply_rating(self, number: int) -> None:
         self._parent._onmenu_apply_rating(self._parent._indices([self._current_stack(),]), number)
 
-    def _onmenu_export_raw(self):
-        self._parent._on_edit_export_raws(self._parent._indices([self._current_stack(),]))
+    def _onmenu_export_raw(self) -> None:
+        self._parent._on_edit_export_raws(indices=self._parent._indices([self._current_stack(),]), parent=self._root)
 
-    def _onmenu_export_jpeg(self):
-        self._parent._on_edit_export_jpegs(self._parent._indices([self._current_stack(),]))
+    def _onmenu_export_jpeg(self) -> None:
+        self._parent._on_edit_export_jpegs(indices=self._parent._indices([self._current_stack(),]), parent=self._root)
 
 # endregion
 
 # region(private_methods)
 
-    def _reset(self):
+    def _reset(self) -> None:
         if hasattr(self, "_canvases") and self._canvases is not None:
             for canvas in self._canvases:
                 canvas._reset()
@@ -280,10 +278,10 @@ class Loupe:
         self._show_histogram = False
         self._display_mode = DisplayMode.preview
 
-    def _current_stack(self):
+    def _current_stack(self) -> Any:
         return self._stacks[self._active_local]
 
-    def _show_popup_menu(self, x, y):
+    def _show_popup_menu(self, x: int, y: int) -> Any:
         menubutton = tb.Menubutton(self._root, text="Actions", bootstyle="primary")
         popup_menu = tb.Menu(menubutton, tearoff=0)
 

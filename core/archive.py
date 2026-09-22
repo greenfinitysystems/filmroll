@@ -32,11 +32,8 @@ from core.util import (
 # region(globals)
 
 logwriter = logging.getLogger(__name__)
-logwriter.setLevel(Config().logger_log_level)
 
 import traceback
-
-
 def _debug_assert_(condition, message):
     if condition: return True
     # Join the list into a single clean string
@@ -581,6 +578,7 @@ class Archive():
                 border_size = cfg.border_ratio,
                 border_color = cfg.border_color,
                 border_exif = 1,
+                caption_color = cfg.caption_color,
                 inject_iptc = 0,
             )
 
@@ -936,6 +934,7 @@ class Archive():
                 border_size = cfg.border_ratio,
                 border_color = cfg.border_color,
                 border_exif = 1,
+                caption_color = cfg.caption_color,
                 inject_iptc = 0,
             )
 

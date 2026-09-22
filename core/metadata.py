@@ -16,7 +16,6 @@ from core.util import IptcInfo
 # region(globals)
 
 logwriter = logging.getLogger(__name__)
-logwriter.setLevel(Config().logger_log_level)
 
 # endregion
 
@@ -195,7 +194,7 @@ class Metadata:
             caption = self.caption,
             comment=self.comment,
             rating=self.rating,
-            tags=self.tags,
+            tags=tuple(self.tags),
         )
 
     def set_iptcinfo(self, value: IptcInfo) -> None:
@@ -207,7 +206,7 @@ class Metadata:
         self.caption = value.caption
         self.comment = value.comment
         self.rating = value.rating
-        self.tags = value.tags
+        self.tags = list(value.tags)
 
     def get_text(self, full: bool = False):
         lines = [

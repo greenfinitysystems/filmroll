@@ -23,7 +23,6 @@ from core.util import JpegExportTemplate
 # region(globals)
 
 logwriter = logging.getLogger(__name__)
-logwriter.setLevel(Config().logger_log_level)
 
 # endregion
 
@@ -72,7 +71,7 @@ class PreviewBuilder:
             if source_image is not None and source_image is not output_image:
                 source_image.close()
 
-        self._copy_metadata(source, destination)
+        self._copy_metadata(source=source, destination=destination, inject_iptc=bool(template.inject_iptc), metadata=metadata)
         logwriter.info(f"Jpeg exported => {destination}")
 
         return size
@@ -110,6 +109,7 @@ class PreviewBuilder:
         border_ratio = template.border_size
         border_color = template.border_color
         border_exif = template.border_exif
+        caption_color = template.caption_color
 
         img = ImageOps.exif_transpose(img)
 
@@ -163,18 +163,18 @@ class PreviewBuilder:
         th = bbox[3] - bbox[1]
 
         w, h = img.size
-        draw.text(((w - tw) / 2, h - th - line1_offset), text_line_1, fill=cfg.caption_color, font=caption_font)
+        draw.text(((w - tw) / 2, h - th - line1_offset), text_line_1, fill=caption_color, font=caption_font)
 
         bbox = draw.textbbox((0, 0), text_line_2, font=caption_font)
 
         tw = bbox[2] - bbox[0]
         th = bbox[3] - bbox[1]
 
-        draw.text(((w - tw) / 2, h - th - line2_offset), text_line_2, fill=cfg.caption_color, font=caption_font)
+        draw.text(((w - tw) / 2, h - th - line2_offset), text_line_2, fill=caption_color, font=caption_font)
 
         return img, w*h
 
-    def _copy_metadata(self, source: str, destination: str) -> None:
+    def _copy_metadata(self, source: str, destination: str, inject_iptc: bool=False, metadata: Any= None) -> None:
         # Following section of code will copy the metadata from source image to
         # our preview image; we may change some values here
         # but most importatly - will fix the orientation so that someone
@@ -192,6 +192,9 @@ class PreviewBuilder:
 
         # IPTC Data
         iptc_data = src_image.iptcData()
+        if inject_iptc:
+            iptcinfo = metadata.get_iptcinfo()
+            logwriter.debug(f"Inject IPTC function not implemented => {iptcinfo}")
 
         # XMP Data
         xmp_data = src_image.xmpData()

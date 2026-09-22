@@ -50,7 +50,7 @@ class Config:
 
         self._curr_conf = {}
 
-        self.log_level = "Error"
+        self.log_level = "error"
         self.gallery_color = "#1e1e1e"
         self.preview_size = 1024
         self.border_ratio = 0.04
@@ -93,7 +93,7 @@ class Config:
             raise RuntimeError(f"Missing Font file {self._curr_conf['caption_font']} while searching in in {str(self._asset_path)}")
 
         logging.basicConfig(
-            level=logging.ERROR,
+            level=self.logger_log_level,
             format='%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d]- %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S',
             filename=self._log_file,
@@ -110,6 +110,7 @@ class Config:
         if val == "debug": return logging.DEBUG
         if val == "info": return logging.INFO
         if val == "warning": return logging.WARNING
+        if val == "error": return logging.ERROR
         return logging.ERROR
 
     @property
