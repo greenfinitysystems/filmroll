@@ -7,7 +7,6 @@ from typing import Any
 
 # region(project_imports)
 
-from core.config import Config
 from core.file import File, FileType
 
 # endregion

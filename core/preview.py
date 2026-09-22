@@ -65,13 +65,23 @@ class PreviewBuilder:
 
             output_image, size = self._transform(source_image, template, metadata)
             output_image.save(destination, quality=template.export_quality)
+
         finally:
             if output_image is not None:
                 output_image.close()
             if source_image is not None and source_image is not output_image:
                 source_image.close()
 
-        self._copy_metadata(source=source, destination=destination, inject_iptc=bool(template.inject_iptc), metadata=metadata)
+        try:
+            self._copy_metadata(source=source, destination=destination, inject_iptc=bool(template.inject_iptc), metadata=metadata)
+
+        except Exception:
+            try:
+                Path(destination).unlink(missing_ok=True)
+            except OSError:
+                logwriter.exception("Unable to remove incomplete JPEG: %s", destination)
+            raise
+
         logwriter.info(f"Jpeg exported => {destination}")
 
         return size

@@ -13,7 +13,6 @@ from typing import Any, NamedTuple
 
 # region(project_imports)
 
-from core.config import Config
 from core.util import Util
 
 # endregion

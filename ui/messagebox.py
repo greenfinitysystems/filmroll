@@ -8,7 +8,7 @@ from ttkbootstrap.dialogs import Messagebox, MessageDialog
 
 # region(project_imports)
 
-from core.config import Config
+# There is nothing here
 
 # endregion
 
