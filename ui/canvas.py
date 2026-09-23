@@ -124,7 +124,8 @@ class Canvas(tb.Canvas):
             font_size = max(8, int(math.ceil(self._rect.width * 0.08 * 14.0/68.3)))
 
             char = "★"
-            color = ("#dddddd", "#FF0000", "#0000FF", "#008000", "#800080", "#F28C28")
+            # color = ("#dddddd", "#FF0000", "#0000FF", "#008000", "#800080", "#F28C28")
+            color = Config().rating_colors
 
             self.create_text(
                 self._rect.right - lm,
@@ -135,7 +136,7 @@ class Canvas(tb.Canvas):
                 anchor="se"
             )
 
-        # notes icon
+        # available source icon
         def _step_6():
             text = ""
             if self._stack.raw is not None:

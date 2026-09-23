@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageTk
 from core.archive import Archive
 from core.config import Config
 from core.proxy import AsyncProxy
+from ui.statusbar import StatusBar
 from ui.aboutdialog import AboutDialog
 from ui.repairarchivedialog import RepairArchiveDialog
 from ui.archivepropertydialog import ArchivePropertyDialog
@@ -134,59 +135,8 @@ class FilmrollGUI:
             # -------------------------
             # STATUS SECTION
             # -------------------------
-
-            self.status = tk.StringVar(value="Ready")
-            self.selstat = tk.StringVar(value="SEL 0")
-            self.docstat = tk.StringVar(value="PRE 0 DOC 0")
-
-            status_frame = tb.Frame(main)
-            status_frame.grid(row=1, column=0, sticky="ew", pady=(2,8))
-            status_frame.columnconfigure(0, weight=1)
-            status_frame.columnconfigure(1, weight=0)
-            status_frame.columnconfigure(2, weight=0)
-            status_frame.columnconfigure(3, weight=4)
-            status_frame.columnconfigure(4, weight=0)
-
-            tb.Label(
-                status_frame,
-                textvariable=self.status,
-                width=30,
-            ).grid(row=0, column=0, sticky="ew", padx=(5,5))
-
-            tb.Label(
-                status_frame,
-                textvariable=self.selstat,
-                width=15,
-                anchor="e",
-            ).grid(row=0, column=1, sticky="ew", padx=(0,0))
-
-            tb.Label(
-                status_frame,
-                textvariable=self.docstat,
-                width=20,
-            ).grid(row=0, column=2, sticky="ew", padx=(0,0))
-
-            self.progress = tb.Progressbar(
-                status_frame,
-                orient="horizontal",
-                mode="determinate",
-                bootstyle="primary"
-            )
-
-            self.progress.grid(row=0, column=3, sticky="ew")
-
-            progress_cancel_img_a = Image.open(cfg.asset("cancel-a.png")).resize((16, 16))
-            self.progress_cancel_img_a = ImageTk.PhotoImage(progress_cancel_img_a)
-            progress_cancel_img_i = Image.open(cfg.asset("cancel-i.png")).resize((16, 16))
-            self.progress_cancel_img_i = ImageTk.PhotoImage(progress_cancel_img_i)
-
-            self.cancel_button = tb.Label(
-                status_frame,
-                image=self.progress_cancel_img_i
-            )
-
-            self.cancel_button.grid(row=0, column=4, padx=(5,5))
-            self.cancel_button_state = tk.DISABLED
+            self._statusbar = StatusBar(parent=main, cancel_func=self.on_cancel_click)
+            self._statusbar.grid(row=1, column=0, sticky="ew", pady=(2,8))
 
             # -------------------------
             # CUSTOM EVENTS SECTION
@@ -274,28 +224,13 @@ class FilmrollGUI:
         else: self._root.attributes('-fullscreen', True)
 
     def update_statusbar(self, status: str, progress, step: bool=False) -> None:
-        if status: 
-            self.status.set(status)
-            self._root.update_idletasks()
-
-        progress = self.progress["value"] + progress if step else progress
-        if progress >= 0:
-            self.progress["value"] = min(100,progress)
-
-        self._root.update_idletasks()
+        self._statusbar.update_statusbar(status=status, progress=progress, step=step)
 
     def reset_statusbar(self) -> None:
         self.update_statusbar("Ready", 0)
 
     def enable_cancel(self, enable: bool=True) -> None:
-        if enable:
-            self.cancel_button.config(image=self.progress_cancel_img_a)
-            self.cancel_button.bind("<Button-1>", self.on_cancel_click)
-            self.cancel_button_state = tk.NORMAL
-        else:
-            self.cancel_button.config(image=self.progress_cancel_img_i)
-            self.cancel_button.unbind("<Button-1>")
-            self.cancel_button_state = tk.DISABLED
+        self._statusbar.enable_cancel(enable=enable)
 
     def report_error(self, message: str, error: Exception=None) -> None:
         logwriter.error(f"{message} => {str(error) if error is not None else 'Unexpected error'}")
@@ -355,10 +290,9 @@ class FilmrollGUI:
             state="normal" if has_document and not_working else "disabled")
 
     def on_cancel_click(self, _) -> None:
-        if self.cancel_button_state == tk.DISABLED:
-            return
-        self.enable_cancel(False)
-        self._proxy.cancel_operation()
+        if self._statusbar.cancel_button_state != tk.DISABLED:
+            self.enable_cancel(False)
+            self._proxy.cancel_operation()
 
     def on_closing(self) -> None:
         try:

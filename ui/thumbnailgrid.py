@@ -166,8 +166,8 @@ class ThumbnailGrid(tb.Frame):
         self._menubar.insert_cascade("View", label="Image", menu=self._image_menu)
         self._menubar.insert_cascade("Image", label="Edit", menu=self._edit_menu)
 
-        ds = f"PRE {self._total_items} DOC {self._doc.file_count}"
-        self._parent.docstat.set(ds)
+        if hasattr(self._parent, '_statusbar'):
+            self._parent._statusbar.set_document_stats(self._doc.file_count)
 
         self._metadata_filters = self._doc.get_filters()
 
@@ -183,7 +183,8 @@ class ThumbnailGrid(tb.Frame):
             self._menubar.delete('Edit')
             self._menubar.delete('Image')
             self._menubar.delete('View')
-            self._parent.docstat.set("PRE 0 DOC 0")
+            if hasattr(self._parent, '_statusbar'):
+                self._parent._statusbar.set_document_stats(0)
             self._image_cache.clear()
         except:
             pass
@@ -848,10 +849,9 @@ class ThumbnailGrid(tb.Frame):
                 tags="thumb"
             )
 
-        flt = "-" if self._rating_filter == 9 else str(self._rating_filter)
-        if hasattr(self._parent, "selstat"):
-            ds = f"SEL {len(self._selected_indices)} FLT {flt}"
-            self._parent.selstat.set(ds)
+        if hasattr(self._parent, "_statusbar"):
+            self._parent._statusbar.set_selected_stats(count=len(self._selected_indices))
+            self._parent._statusbar.set_rating_indicator(self._rating_filter)
 
         self._canvas.delete("thumb")
 
@@ -918,7 +918,8 @@ class ThumbnailGrid(tb.Frame):
 
                 if 1 <= int(rating) <= 5:    
                     char = "★"
-                    color = ("#dddddd", "#FF0000", "#0000FF", "#008000", "#800080", "#F28C28")
+                    color = Config().rating_colors
+                    # ("#dddddd", "#FF0000", "#0000FF", "#008000", "#800080", "#F28C28")
 
                     self._canvas.create_text(
                         bbox[2] - 10,
@@ -1499,7 +1500,7 @@ class ThumbnailGrid(tb.Frame):
                         return False
         return True
 
-    def _apply_filters(self) -> None:
+    def _apply_filters(self) -> bool:
         self._filtered_indices.clear()
 
         for i in range(self._total_items):
@@ -1531,6 +1532,7 @@ class ThumbnailGrid(tb.Frame):
     def _toggle_filter(self, filter: Any) -> None:
         if self._active_filters & filter: self._active_filters &= ~filter
         else: self._active_filters |= filter
+        self._parent._statusbar.set_filter_indicator(self._active_filters & self.FILTER_METADATA)
         self._apply_filters()
         self._redraw()
         self._canvas.focus_set()

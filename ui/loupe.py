@@ -168,7 +168,7 @@ class Loupe:
                 else int(event.keysym)
             )
         
-            self._onkey_apply_rating(nval)
+            self._onmenu_apply_rating(nval)
             return "break"
 
 # endregion

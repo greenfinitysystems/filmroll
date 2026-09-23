@@ -316,6 +316,10 @@ Created by Bibhas Das.
     def tagstore(self) -> Any:
         return self._tagstore
 
+    @property
+    def rating_colors(self) -> set:
+        return ("#dddddd", "#FF0000", "#0000FF", "#008000", "#800080", "#F28C28", "#ffffff", "#ffffff", "#ffffff", "#ffffff")
+
 # endregion
 
 # region(methods)
