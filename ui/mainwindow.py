@@ -35,20 +35,21 @@ from ui.thumbnailgrid import ThumbnailGrid
 class FileMenu(Enum):
     new = 0
     open = 1
-    save = 2
-    saveAs = 3
-    close = 4
-    separator_1 = 5
-    repair = 6
-    separator_2 = 7
-    importFiles = 8
-    importFolder = 9
-    separator_3 = 10
-    properties = 11
-    separator_4 = 12
-    options = 13
-    separator_5 = 14
-    exit = 15
+    openRecent = 2
+    save = 3
+    saveAs = 4
+    close = 5
+    separator_1 = 6
+    repair = 7
+    separator_2 = 8
+    importFiles = 9
+    importFolder = 10
+    separator_3 = 11
+    properties = 12
+    separator_4 = 13
+    options = 14
+    separator_5 = 15
+    exit = 16
 
 # endregion
 
@@ -110,6 +111,10 @@ class FilmrollGUI:
             self.menubar.add_cascade(label="File", menu=self.file_menu)
             self.file_menu.add_command(label="New...", command=self.on_file_new, accelerator="Ctrl+N")
             self.file_menu.add_command(label="Open...", command=self.on_file_open, accelerator="Ctrl+O")
+
+            self._recent_menu = tb.Menu(self.file_menu, tearoff=False,)
+            self.file_menu.add_cascade(label="Recently Opened", menu=self._recent_menu,)
+
             self.file_menu.add_command(label="Save", command=self.on_file_save, accelerator="Ctrl+S")
             self.file_menu.add_command(label="Save As...", command=self.on_file_save_as)
             self.file_menu.add_command(label="Close", command=self.on_file_close)
@@ -289,6 +294,8 @@ class FilmrollGUI:
         self.file_menu.entryconfigure(FileMenu.properties.value, 
             state="normal" if has_document and not_working else "disabled")
 
+        self._update_recent_files_menu()
+
     def on_cancel_click(self, _) -> None:
         if self._statusbar.cancel_button_state != tk.DISABLED:
             self.enable_cancel(False)
@@ -386,6 +393,130 @@ class FilmrollGUI:
             # clean up the status bar
             self.reset_statusbar()
 
+    def on_file_open_direct(self, arc_path) -> None:
+        if not _debug_assert_(( self.doc is None or self.doc.ready),
+            "FilmrollGUI.on_file_reload() - no active archive or archive busy"): return
+
+        try:            
+            # close the current active document, if any
+            self.on_file_close()
+
+            # open the document
+            self.doc = Archive.open(arc_path)
+
+            # important to check if this archive has errors
+            if not self.doc.check():
+                raise ValueError("Archive has issues")
+
+            # document is clean
+            self._root.title(self.doc.name)
+            self.thumbnailgrid.set_doc(self.doc)
+
+            Config().add_recent_file(arc_path)
+
+        except ValueError:
+            # we have error in the archive
+            # alert the user that the current archive need repair and fix
+            # return if the user cancels
+            if self.askyesno("Error", "Archive is corrupt or moved to another location. Fix it?"):
+                self.on_file_repair()
+            else:
+                self.doc = None
+
+        except Exception as e: 
+            self.report_error("FilrollGUI.on_file_reload() - Exception occured Archive.reload", str(e))
+
+            # safe to close any open document
+            self.on_file_close()
+
+        finally:
+            # clean up the status bar
+            self.reset_statusbar()
+
+    def _recent_file_label(self, path, paths):
+        """Return a human-friendly, collision-free recent-file label."""
+
+        path = Path(path)
+
+        base_label = f"{path.parent.name} — {path.name}"
+
+        conflicts = [
+            Path(other)
+            for other in paths
+            if Path(other) != path
+            and Path(other).parent.name == path.parent.name
+            and Path(other).name == path.name
+        ]
+
+        if not conflicts:
+            return base_label
+
+        # Add one more directory level.
+        parent = path.parent.parent
+
+        if parent != path.parent:
+            return f"{parent.name} / {path.parent.name} — {path.name}"
+
+        return str(path)
+
+    def _update_recent_files_menu(self):
+        """Refresh the Recently Opened Archives submenu."""
+
+        cfg = Config()
+
+        self._recent_menu.delete(0, "end")
+
+        recent_files = cfg.recent_files
+
+        if not recent_files:
+            self._recent_menu.add_command(
+                label="No Recent Archives",
+                state="disabled",
+            )
+            return
+
+        valid_files = []
+
+        for filename in recent_files:
+            path = Path(filename)
+
+            if path.exists():
+                valid_files.append(str(path))
+
+        # Remove archives that no longer exist.
+        if valid_files != recent_files:
+            cfg.recent_files = valid_files
+            cfg._save()
+
+        if not valid_files:
+            self._recent_menu.add_command(
+                label="No Recent Archives",
+                state="disabled",
+            )
+            return
+
+        for filename in valid_files:
+            label = self._recent_file_label(
+                filename,
+                valid_files,
+            )
+
+            self._recent_menu.add_command(
+                label=label,
+                command=lambda path=filename: self._open_recent_archive(path),
+            )
+
+    def _open_recent_archive(self, filename):
+        """Open an archive selected from Recently Opened Archives."""
+
+        path = Path(filename)
+
+        if not path.exists():
+            self._update_recent_files_menu()
+            return
+
+        self.on_file_open_direct(filename)
+
 # endregion
 
 # region(help_menu)
@@ -413,6 +544,8 @@ class FilmrollGUI:
             self.doc = Archive.new(dir)
             self._root.title(self.doc.name)
             self.thumbnailgrid.set_doc(self.doc)
+
+            Config().add_recent_file(str(self.doc._last_saved_loc))
 
         except Exception as e: 
             self.report_error("Exception occured creating new archive", str(e))
@@ -445,6 +578,8 @@ class FilmrollGUI:
             # document is clean
             self._root.title(self.doc.name)
             self.thumbnailgrid.set_doc(self.doc)
+
+            Config().add_recent_file(arc_path)
 
         except ValueError:
             # we have error in the archive
@@ -508,6 +643,8 @@ class FilmrollGUI:
 
             # update the view
             self.thumbnailgrid.set_doc(self.doc)
+
+            Config().add_recent_file(filename)
 
         except Exception as e: 
             self.report_error("Exception occured saving the document", str(e))

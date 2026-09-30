@@ -83,6 +83,7 @@ class Config:
             ["Ultra Telephoto",  600.1, 1000.0]
         ]
 
+        self.recent_files = []
         self._load()
 
         # always save it back
@@ -320,12 +321,55 @@ Created by Bibhas Das.
     def rating_colors(self) -> set:
         return ("#dddddd", "#FF0000", "#0000FF", "#008000", "#800080", "#F28C28", "#ffffff", "#ffffff", "#ffffff", "#ffffff")
 
+    @property
+    def recent_files(self) -> list:
+        return list(self._curr_conf["recent_files"])
+
+    @recent_files.setter
+    def recent_files(self, value: list) -> None:
+        attrib = "recent_files"
+
+        try:
+            if not isinstance(value, list):
+                raise Exception()
+
+            recent = []
+            for path in value:
+                if isinstance(path, str):
+                    path = path.strip()
+                    if path and path not in recent:
+                        recent.append(path)
+                        if len(recent) >= 4:
+                            break
+
+            self._curr_conf[attrib] = recent
+
+        except Exception:
+            self._curr_conf[attrib] = []
+
 # endregion
 
 # region(methods)
 
     def asset(self, value: str) -> Path:
         return Path(self._asset_path / value)
+
+    def add_recent_file(self, path) -> None:
+        try:
+            path = str(Path(path).resolve())
+        except Exception:
+            return
+
+        recent = [
+            value
+            for value in self.recent_files
+            if value != path
+        ]
+
+        recent.insert(0, path)
+
+        self.recent_files = recent[:4]
+        self._save()
 
 # endregion
 
