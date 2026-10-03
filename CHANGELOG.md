@@ -1,4 +1,26 @@
 All notable changes to Filmroll are documented here.
+
+## [0.7.0] - 2026-10-03
+
+More efficient than previous versions. Backward compatible with archive created with earlier versions.
+UI is more polished and code structure is improved.
+
+## Fixed
+- Multiple UI related issues fixed
+
+## Changed
+- Improved Statusbar
+- Multiple values for Filters
+- Improved Context menus
+
+## Added
+- Most recent archives
+- Tagging
+- Image Property Management
+- Bulk Image property and tag management
+- Global Configuration dialog
+
+
 ## [0.6.1] - 2026-09-18
 
 ### Fixed
